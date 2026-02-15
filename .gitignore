@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Export artifacts (keep .gitkeep)
+exports/prompts/*
+exports/chats/*
+exports/sessions/*
+!exports/**/.gitkeep

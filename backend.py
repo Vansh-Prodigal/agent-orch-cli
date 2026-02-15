@@ -1,0 +1,1178 @@
+"""
+JSON-line backend for the Ink CLI.
+
+Protocol:
+  - Reads JSON commands from stdin (one per line)
+  - Writes JSON events to stdout (one per line)
+  - All Python logging / print output goes to stderr
+
+Commands (stdin):
+  load_config       {to_number, from_number?, call_direction?, config_overrides?}
+  load_config_file  {path}
+  load_session      {path}
+  send_message      {text}
+  get_state         {}
+  get_transcript    {}
+  get_context       {}  -- full chat context as the LLM sees it
+  get_prompt        {}  -- current assembled system + state prompt
+  end_call          {}
+  shutdown          {}
+
+Events (stdout):
+  ready             {version}
+  config_loaded     {call_id, config_source, starting_state, first_message}
+  stream_start      {}
+  stream_chunk      {text}
+  stream_end        {}
+  tool_calls        {tool_calls: [{tool_call_id, name, arguments, result}]}
+  state_changed     {state}
+  context           {messages: [...]}
+  prompt            {prompt}
+  call_ended        {transcript}
+  error             {message, code?}
+"""
+
+import asyncio
+import builtins
+import json
+import logging
+import os
+import sys
+import time
+import uuid
+from copy import deepcopy
+from typing import Any, Dict, List, Optional, Tuple
+
+# ---------------------------------------------------------------------------
+# Redirect ALL output to stderr BEFORE importing anything from agent_orchestrator
+# ---------------------------------------------------------------------------
+
+_original_stdout = sys.stdout
+# Create a NEW file object from fd 1 (stdout) so no library can intercept it
+_event_writer = os.fdopen(os.dup(sys.stdout.fileno()), "w")
+sys.stdout = sys.stderr  # everything else (print, logs) → stderr
+
+# Override builtins.print so third-party / internal prints go to stderr
+_original_print = builtins.print
+
+
+def _stderr_print(*args, **kwargs):
+    kwargs.setdefault("file", sys.stderr)
+    _original_print(*args, **kwargs)
+
+
+builtins.print = _stderr_print
+
+# Configure root logger → stderr
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    stream=sys.stderr,
+    force=True,
+)
+
+# ---------------------------------------------------------------------------
+# Path setup — navigate from cli/ to agent_orchestrator/
+# ---------------------------------------------------------------------------
+
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(_script_dir)  # cli/ → project root
+_agent_dir = os.path.join(_project_root, "agent_orchestrator")
+
+# Load .env if present (before importing Config)
+try:
+    from dotenv import load_dotenv
+
+    env_path = os.path.join(_agent_dir, ".env.local")
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
+    else:
+        env_path2 = os.path.join(_agent_dir, ".env")
+        if os.path.exists(env_path2):
+            load_dotenv(env_path2)
+except ImportError:
+    pass
+
+# Ensure agent_orchestrator/ is on sys.path (needed when run directly)
+if _agent_dir not in sys.path:
+    sys.path.insert(0, _agent_dir)
+os.chdir(_agent_dir)
+
+# Now safe to import project modules
+from custom_plugins.custom_llm.utils import (  # noqa: E402
+    convert_chat_ctx_to_openai_format,
+    create_custom_llm_chat_ctx,
+)
+from livekit.agents import AgentSession  # noqa: E402
+from livekit.agents.llm import ChatContext  # noqa: E402
+from livekit.agents.llm.chat_context import (  # noqa: E402
+    ChatMessage,
+    FunctionCall,
+    FunctionCallOutput,
+)
+from proagent.agent import DynamicVariablesWebhook, ProAgent  # noqa: E402
+from proagent.prompts import get_state_system_prompt  # noqa: E402
+from proagent.utils import get_config_from_db  # noqa: E402
+from schemas.events import (  # noqa: E402
+    AgentSessionUserData,
+    ToolCallInvocationResponse,
+    ToolCallResultResponse,
+)
+from schemas.types import CallDirection, LLMUsage, ProAgentLLMConfig  # noqa: E402
+
+logger = logging.getLogger("cli_backend")
+logger.setLevel(logging.DEBUG)
+
+VERSION = "0.2.0"
+
+
+# ---------------------------------------------------------------------------
+# Event emitter — writes JSON lines to the original stdout
+# ---------------------------------------------------------------------------
+
+
+def emit(event: str, **data):
+    """Write a single JSON-line event to the Ink CLI."""
+    payload = {"event": event, **data}
+    line = json.dumps(payload, ensure_ascii=False)
+    _event_writer.write(line + "\n")
+    _event_writer.flush()
+
+
+def emit_error(message: str, code: Optional[str] = None):
+    emit("error", message=message, **({"code": code} if code else {}))
+
+
+# ---------------------------------------------------------------------------
+# Deep merge for config overrides
+# ---------------------------------------------------------------------------
+
+
+def deep_merge(base: dict, overrides: dict) -> dict:
+    """Recursively merge *overrides* into *base* (non-mutating)."""
+    result = deepcopy(base)
+    for key, value in overrides.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = deepcopy(value)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Inlined from simulator/core.py — MockCallService, generate_call_id,
+# _create_session, _parse_transcript
+# ---------------------------------------------------------------------------
+
+
+class MockCallService:
+    """Mock call service for simulation - stubs out call operations."""
+
+    def __init__(self):
+        self._agent_session = None
+
+    async def update_call_details_in_redis(self, details: dict):
+        pass
+
+    async def transfer_call(self, request):
+        pass
+
+    async def end_call(self, end_reason: str):
+        pass
+
+
+def generate_call_id() -> str:
+    """Generate a unique call ID for simulation."""
+    id = str(uuid.uuid4())[:7]
+    return f"call_simulation_{id}"
+
+
+def _parse_transcript(
+    chat_ctx: ChatContext, transcript: List[Dict]
+) -> Tuple[
+    List[Tuple[str, Optional[str]]],
+    Dict[str, ToolCallInvocationResponse],
+    Dict[str, ToolCallResultResponse],
+]:
+    """
+    Parse transcript and extract messages and tool call data.
+
+    Populates *chat_ctx* with user/assistant messages from the transcript and
+    returns tool-call tracking structures for AgentSessionUserData.
+    """
+    tool_call_ids: List[Tuple[str, Optional[str]]] = []
+    tool_call_invocations: Dict[str, ToolCallInvocationResponse] = {}
+    tool_call_results: Dict[str, ToolCallResultResponse] = {}
+
+    if not transcript:
+        return tool_call_ids, tool_call_invocations, tool_call_results
+
+    last_message_id: Optional[str] = None
+    message_counter = 0
+
+    for item in transcript:
+        role = item.get("role")
+        created_at = item.get("created_at", int(time.time() * 1000))
+
+        if role == "user":
+            message_id = f"msg_{message_counter}"
+            message_counter += 1
+            chat_ctx.add_message(
+                role="user",
+                content=item.get("content", ""),
+                id=message_id,
+            )
+            last_message_id = message_id
+
+        elif role in ("assistant", "agent"):
+            message_id = f"msg_{message_counter}"
+            message_counter += 1
+            chat_ctx.add_message(
+                role="assistant",
+                content=item.get("content", ""),
+                id=message_id,
+            )
+            last_message_id = message_id
+
+            tool_calls_list = item.get("tool_calls", [])
+            for tool_call in tool_calls_list:
+                tool_call_id = tool_call.get("id", "")
+                function_data = tool_call.get("function", {})
+
+                tool_call_ids.append((tool_call_id, last_message_id))
+
+                tool_call_invocations[tool_call_id] = ToolCallInvocationResponse(
+                    response_id=0,
+                    tool_call_id=tool_call_id,
+                    name=function_data.get("name", ""),
+                    arguments=function_data.get("arguments", "{}"),
+                    created_at=created_at,
+                    pre_tool_call_text_length=item.get(
+                        "pre_tool_call_text_length", 0
+                    ),
+                )
+
+        elif role == "tool":
+            tool_call_id = item.get("tool_call_id", "")
+            tool_call_results[tool_call_id] = ToolCallResultResponse(
+                response_id=0,
+                tool_call_id=tool_call_id,
+                content=item.get("content", ""),
+                created_at=created_at,
+            )
+
+    return tool_call_ids, tool_call_invocations, tool_call_results
+
+
+def _create_session(
+    chat_ctx: ChatContext, transcript: List[Dict]
+) -> AgentSession:
+    """
+    Create a mock AgentSession for text-only simulation.
+
+    Parses *transcript* into *chat_ctx* and builds the session with the
+    extracted tool-call tracking data.
+    """
+    tool_call_ids, tool_call_invocations, tool_call_results = _parse_transcript(
+        chat_ctx, transcript
+    )
+
+    userdata = AgentSessionUserData(
+        tool_call_ids=tool_call_ids,
+        tool_call_invocations=tool_call_invocations,
+        tool_call_results=tool_call_results,
+    )
+
+    session = AgentSession[AgentSessionUserData](
+        stt=None,
+        llm=None,
+        tts=None,
+        vad=None,
+        userdata=userdata,
+        turn_detection="manual",
+        allow_interruptions=False,
+        min_interruption_duration=0.5,
+        min_interruption_words=0,
+        min_endpointing_delay=0.5,
+        max_endpointing_delay=3.0,
+        user_away_timeout=None,
+        false_interruption_timeout=None,
+    )
+
+    return session
+
+
+def _build_chat_ctx_from_openai_messages(messages: List[Dict]) -> ChatContext:
+    """Build a ChatContext directly from OpenAI-format messages.
+
+    Creates ChatMessage, FunctionCall, and FunctionCallOutput items
+    directly — bypassing _parse_transcript and the lossy
+    create_custom_llm_chat_ctx reconstruction.
+
+    When tool_call_ids in session.userdata is empty,
+    create_custom_llm_chat_ctx passes items through as-is,
+    and convert_chat_ctx_to_utterances handles all three types natively.
+    """
+    chat_ctx = ChatContext.empty()
+    now = time.time()
+
+    for msg in messages:
+        role = msg.get("role")
+
+        if role in ("user", "system"):
+            chat_ctx.items.append(
+                ChatMessage(
+                    role=role,
+                    content=[msg.get("content", "")],
+                    created_at=now,
+                )
+            )
+        elif role in ("assistant", "agent"):
+            content = msg.get("content", "")
+            # Add the text part as a ChatMessage (even if empty — the
+            # conversion pipeline expects an assistant message before tools)
+            if content or "tool_calls" not in msg:
+                chat_ctx.items.append(
+                    ChatMessage(
+                        role="assistant",
+                        content=[content or ""],
+                        created_at=now,
+                    )
+                )
+            # Add each tool call as a FunctionCall item
+            for tc in msg.get("tool_calls", []):
+                func = tc.get("function", {})
+                chat_ctx.items.append(
+                    FunctionCall(
+                        call_id=tc.get("id", ""),
+                        name=func.get("name", ""),
+                        arguments=func.get("arguments", ""),
+                        created_at=now,
+                    )
+                )
+        elif role == "tool":
+            chat_ctx.items.append(
+                FunctionCallOutput(
+                    call_id=msg.get("tool_call_id", ""),
+                    output=msg.get("content", ""),
+                    is_error=False,
+                    created_at=now,
+                )
+            )
+
+    logger.info(
+        "Built chat_ctx from %d OpenAI messages → %d items",
+        len(messages), len(chat_ctx.items),
+    )
+    return chat_ctx
+
+
+# ---------------------------------------------------------------------------
+# Backend state — holds ProAgent components directly
+# ---------------------------------------------------------------------------
+
+
+class BackendState:
+    def __init__(self):
+        self.agent: Optional[ProAgent] = None
+        self.chat_ctx: Optional[ChatContext] = None
+        self.session: Optional[AgentSession] = None
+        self.call_service: Optional[MockCallService] = None
+        self.call_id: Optional[str] = None
+        self.config: Optional[Dict[str, Any]] = None
+        self.config_source: Optional[str] = None
+        self.last_state: Optional[str] = None
+        # Track transcript length to diff tool calls after each turn
+        self.transcript_snapshot: List[Dict] = []
+
+
+state = BackendState()
+
+
+# ---------------------------------------------------------------------------
+# Config normalization
+# ---------------------------------------------------------------------------
+
+
+def normalize_config(raw: dict) -> dict:
+    """
+    Normalize a config dict into the format ProAgent expects.
+
+    ProAgent needs:
+      {tenant_id, from_number, to_number, call_direction, llm_config: {...}, metadata?}
+
+    But local config files (like chat_config.json) are typically the llm_config
+    itself (with llm_client, llm_model, states, general_prompt, etc. at top level).
+
+    If the config already has "llm_config" as a nested dict, return as-is
+    (with defaults for missing wrapper fields). Otherwise, wrap the whole
+    thing as llm_config.
+    """
+    if "llm_config" in raw and isinstance(raw["llm_config"], dict):
+        # Already in the wrapped format — just fill defaults
+        raw.setdefault("from_number", "+10000000000")
+        raw.setdefault("to_number", "+10000000001")
+        raw.setdefault("call_direction", "inbound")
+        raw.setdefault("tenant_id", raw.get("tenant_id", "simulator"))
+        return raw
+
+    # The raw config IS the llm_config — wrap it
+    tenant_id = raw.pop("tenant_id", "simulator")
+    return {
+        "tenant_id": tenant_id,
+        "from_number": "+10000000000",
+        "to_number": "+10000000001",
+        "call_direction": "inbound",
+        "llm_config": raw,
+        "metadata": {},
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tool call diffing
+# ---------------------------------------------------------------------------
+
+
+def _get_full_transcript() -> List[Dict]:
+    """Get the full transcript with tool calls in OpenAI format."""
+    if not state.agent or not state.chat_ctx or not state.session:
+        return []
+    custom_llm_chat_ctx = create_custom_llm_chat_ctx(
+        state.chat_ctx, state.session.userdata
+    )
+    _, transcript_with_tool_calls = convert_chat_ctx_to_openai_format(
+        custom_llm_chat_ctx
+    )
+    return transcript_with_tool_calls
+
+
+def _diff_and_emit_tool_calls():
+    """
+    Compare current transcript with snapshot to find new tool call entries.
+
+    The transcript contains:
+      - {"role": "assistant", "content": "...", "tool_calls": [{id, type, function: {name, arguments}}]}
+      - {"role": "tool", "tool_call_id": "...", "content": "..."}
+
+    We find new entries since the last snapshot and pair invocations with results.
+    """
+    if not state.agent:
+        return
+
+    current = _get_full_transcript()
+    old_len = len(state.transcript_snapshot)
+    new_entries = current[old_len:]
+    state.transcript_snapshot = current
+
+    logger.debug(
+        "tool_call diff: snapshot_len=%d, current_len=%d, new_entries=%d",
+        old_len, len(current), len(new_entries),
+    )
+    for i, entry in enumerate(new_entries):
+        logger.debug("  new[%d]: role=%s, has_tool_calls=%s, keys=%s",
+                      i, entry.get("role"), "tool_calls" in entry, list(entry.keys()))
+
+    if not new_entries:
+        return
+
+    # Collect tool call invocations from assistant messages
+    invocations: Dict[str, Dict] = {}
+    results: Dict[str, str] = {}
+
+    for entry in new_entries:
+        role = entry.get("role")
+        if role in ("assistant", "agent") and "tool_calls" in entry:
+            for tc in entry["tool_calls"]:
+                tc_id = tc.get("id", "")
+                func = tc.get("function", {})
+                invocations[tc_id] = {
+                    "tool_call_id": tc_id,
+                    "name": func.get("name", ""),
+                    "arguments": func.get("arguments", ""),
+                }
+        elif role == "tool":
+            tc_id = entry.get("tool_call_id", "")
+            results[tc_id] = entry.get("content", "")
+
+    # Pair invocations with results
+    if invocations:
+        formatted = []
+        for tc_id, inv in invocations.items():
+            formatted.append(
+                {
+                    "tool_call_id": inv["tool_call_id"],
+                    "name": inv["name"],
+                    "arguments": inv["arguments"],
+                    "result": results.get(tc_id, ""),
+                }
+            )
+        logger.info("Emitting %d tool_calls: %s", len(formatted),
+                     [f["name"] for f in formatted])
+        emit("tool_calls", tool_calls=formatted)
+    else:
+        logger.debug("No tool call invocations found in new entries")
+
+
+def _transcript_to_frontend_messages(transcript: List[Dict]) -> List[Dict]:
+    """Convert OpenAI-format transcript to frontend-displayable messages.
+
+    Groups assistant text + tool calls together, and converts tool results
+    into a paired format for display.
+    """
+    messages = []
+    for msg in transcript:
+        role = msg.get("role")
+        if role == "user":
+            content = msg.get("content", "")
+            if content:  # skip empty user messages (greeting trigger)
+                messages.append({"role": "user", "content": content})
+        elif role in ("assistant", "agent"):
+            content = msg.get("content", "")
+            tool_calls = msg.get("tool_calls")
+            entry: Dict[str, Any] = {"role": "assistant", "content": content or ""}
+            if tool_calls:
+                entry["tool_calls"] = [
+                    {
+                        "tool_call_id": tc.get("id", ""),
+                        "name": tc.get("function", {}).get("name", ""),
+                        "arguments": tc.get("function", {}).get("arguments", ""),
+                        "result": "",
+                    }
+                    for tc in tool_calls
+                ]
+            messages.append(entry)
+        elif role == "tool":
+            # Find the matching assistant tool_call entry and fill in the result
+            tc_id = msg.get("tool_call_id", "")
+            result_content = msg.get("content", "")
+            for prev in reversed(messages):
+                if prev.get("tool_calls"):
+                    for tc in prev["tool_calls"]:
+                        if tc["tool_call_id"] == tc_id:
+                            tc["result"] = result_content
+                    break
+    return messages
+
+
+# ---------------------------------------------------------------------------
+# Command handlers
+# ---------------------------------------------------------------------------
+
+
+async def handle_load_config(data: dict):
+    """Load config from the remote config manager service."""
+    to_number = data.get("to_number", "")
+    from_number = data.get("from_number", "+10000000000")
+    call_direction = data.get("call_direction", "inbound")
+    config_overrides = data.get("config_overrides")
+
+    call_id = generate_call_id()
+
+    try:
+        raw_config = await get_config_from_db(
+            phone_number=to_number,
+            call_id=call_id,
+            call_direction=call_direction,
+        )
+    except Exception as e:
+        emit_error(f"Failed to fetch remote config: {e}", code="CONFIG_FETCH_FAILED")
+        return
+
+    if not raw_config:
+        emit_error("No config returned for that phone number", code="CONFIG_NOT_FOUND")
+        return
+
+    # Build the config dict that ProAgent expects.
+    # get_config_from_db returns {llm_config: {...}, agent_config: {...}, tenant_id: ...}
+    db_llm_config = raw_config.get("llm_config", {})
+    if not db_llm_config:
+        emit_error(
+            "Remote config has no llm_config", code="CONFIG_MISSING_LLM"
+        )
+        return
+
+    config = {
+        "tenant_id": raw_config.get("tenant_id", ""),
+        "from_number": from_number,
+        "to_number": to_number,
+        "call_direction": call_direction,
+        "llm_config": db_llm_config,
+        "metadata": raw_config.get("metadata", {}),
+    }
+
+    source = "remote"
+    if config_overrides:
+        config = deep_merge(config, config_overrides)
+        source = "merged"
+
+    await _init_agent(config, call_id, source)
+
+
+async def handle_load_config_file(data: dict):
+    """Load config entirely from a local JSON file."""
+    path = data.get("path", "")
+    if not os.path.isabs(path):
+        # Resolve relative to agent_orchestrator/ for backward compat
+        path = os.path.join(_agent_dir, path)
+
+    try:
+        with open(path, "r") as f:
+            raw = json.load(f)
+    except FileNotFoundError:
+        emit_error(f"Config file not found: {path}", code="FILE_NOT_FOUND")
+        return
+    except json.JSONDecodeError as e:
+        emit_error(f"Invalid JSON in config file: {e}", code="INVALID_JSON")
+        return
+
+    config = normalize_config(raw)
+    call_id = generate_call_id()
+    await _init_agent(config, call_id, "local")
+
+
+async def handle_load_session(data: dict):
+    """Resume a saved session or replay a chat export against a config.
+
+    Supports two formats:
+      1. Session format: {config, transcript, currentState, callId, ...}
+         — self-contained, config is embedded
+      2. Chat export format: {messages (with index), current_state, call_id,
+         resume_from, ...}
+         — config-agnostic, requires a separate config via config_path or to_number
+
+    When resume_from is a number, the transcript is sliced to [:resume_from+1].
+    """
+    path = data.get("path", "")
+    if not os.path.isabs(path):
+        path = os.path.join(os.getcwd(), path)
+
+    try:
+        with open(path, "r") as f:
+            session_data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        emit_error(f"Failed to load session: {e}", code="SESSION_LOAD_FAILED")
+        return
+
+    resume_from = session_data.get("resume_from")
+
+    # Auto-detect format: chat export has "messages" with "index" fields
+    messages = session_data.get("messages", [])
+    is_chat_export = (
+        len(messages) > 0
+        and isinstance(messages[0], dict)
+        and "index" in messages[0]
+    )
+
+    # --- Resolve config ---
+    config = session_data.get("config")
+    has_embedded_config = config and (
+        "llm_config" in config or "llm_client" in config or "states" in config
+    )
+
+    if has_embedded_config:
+        # Session format — config is embedded
+        config = normalize_config(config)
+    else:
+        # Chat export or session without config — need external config
+        config = await _resolve_external_config(data)
+        if config is None:
+            return  # error already emitted
+
+    # --- Resolve transcript and metadata ---
+    if is_chat_export:
+        # Chat export format — strip index fields to get plain transcript
+        transcript = [{k: v for k, v in msg.items() if k != "index"} for msg in messages]
+        current_state = session_data.get("current_state")
+        call_id = session_data.get("call_id", generate_call_id())
+    else:
+        # Original session format
+        transcript = session_data.get("transcript", [])
+        current_state = session_data.get("currentState")
+        call_id = session_data.get("callId", generate_call_id())
+
+    # Apply resume_from: slice transcript up to and including that index
+    if resume_from is not None and isinstance(resume_from, int):
+        logger.info(f"resume_from={resume_from}, slicing transcript from {len(transcript)} to {resume_from + 1} messages")
+        transcript = transcript[: resume_from + 1]
+
+    # Inject transcript, state, and dynamic vars into config for reconstruction
+    config["transcript"] = transcript
+    if current_state:
+        config["current_state"] = current_state
+    dynamic_vars = session_data.get("dynamic_vars")
+    if dynamic_vars:
+        config["dynamic_vars"] = dynamic_vars
+
+    await _init_agent(config, call_id, "session")
+
+
+async def _resolve_external_config(data: dict) -> Optional[dict]:
+    """Load config from config_path or to_number provided in the command.
+
+    Returns a normalized config dict, or None if config cannot be resolved
+    (error is emitted in that case).
+    """
+    config_path = data.get("config_path")
+    to_number = data.get("to_number")
+
+    if config_path:
+        # Load from local file
+        if not os.path.isabs(config_path):
+            config_path = os.path.join(_agent_dir, config_path)
+        try:
+            with open(config_path, "r") as f:
+                raw = json.load(f)
+        except FileNotFoundError:
+            emit_error(f"Config file not found: {config_path}", code="FILE_NOT_FOUND")
+            return None
+        except json.JSONDecodeError as e:
+            emit_error(f"Invalid JSON in config file: {e}", code="INVALID_JSON")
+            return None
+        return normalize_config(raw)
+
+    elif to_number:
+        # Fetch from remote config service
+        from_number = data.get("from_number", "+10000000000")
+        call_id = generate_call_id()
+        try:
+            raw_config = await get_config_from_db(
+                phone_number=to_number,
+                call_id=call_id,
+                call_direction="inbound",
+            )
+        except Exception as e:
+            emit_error(f"Failed to fetch remote config: {e}", code="CONFIG_FETCH_FAILED")
+            return None
+        if not raw_config or not raw_config.get("llm_config"):
+            emit_error("No config returned for that phone number", code="CONFIG_NOT_FOUND")
+            return None
+        return {
+            "tenant_id": raw_config.get("tenant_id", ""),
+            "from_number": from_number,
+            "to_number": to_number,
+            "call_direction": "inbound",
+            "llm_config": raw_config["llm_config"],
+            "metadata": raw_config.get("metadata", {}),
+        }
+
+    else:
+        emit_error(
+            "Chat export requires a config. "
+            "Use --config <path> or --to-number <number> alongside --load-session.",
+            code="SESSION_NO_CONFIG",
+        )
+        return None
+
+
+async def _init_agent(config: dict, call_id: str, source: str):
+    """Create a ProAgent directly and emit config_loaded."""
+    try:
+        # Build ProAgent (inlined from ChatSimulatorCore.__init__)
+        call_service = MockCallService()
+        dynamic_variables_webhook = DynamicVariablesWebhook(
+            call_id=call_id,
+            tenant_id=config["tenant_id"],
+            from_number=config["from_number"],
+            to_number=config["to_number"],
+            call_direction=CallDirection(config["call_direction"]),
+            llm_config=ProAgentLLMConfig(**config["llm_config"]),
+            metadata=config.get("metadata", {}),
+            should_prefetch_webhook_data=False,
+        )
+        agent = ProAgent(
+            call_id=call_id,
+            tenant_id=config["tenant_id"],
+            from_number=config["from_number"],
+            to_number=config["to_number"],
+            call_direction=CallDirection(config["call_direction"]),
+            proagent_llm_config=ProAgentLLMConfig(**config["llm_config"]),
+            call_service=call_service,
+            metadata=config.get("metadata", {}),
+            dynamic_variables_webhook=dynamic_variables_webhook,
+        )
+
+        # Handle current_state override (must happen before session creation)
+        if "current_state" in config:
+            logger.info(f"Setting current state to {config['current_state']}")
+            agent.state_manager.current_state = config["current_state"]
+
+        # Restore dynamic variables if present (from chat export / session)
+        if "dynamic_vars" in config and config["dynamic_vars"]:
+            logger.info("Restoring %d dynamic variables", len(config["dynamic_vars"]))
+            agent.state_manager.dynamic_vars.update(config["dynamic_vars"])
+
+        transcript = config.get("transcript", [])
+
+        if transcript:
+            # Loaded session — build chat_ctx directly from the OpenAI-format
+            # messages so they pass through create_custom_llm_chat_ctx unchanged.
+            chat_ctx = _build_chat_ctx_from_openai_messages(transcript)
+            session = _create_session(ChatContext.empty(), [])  # empty userdata
+        else:
+            # Fresh session
+            chat_ctx = ChatContext.empty()
+            session = _create_session(chat_ctx, [])
+
+        # Store in global state
+        state.agent = agent
+        state.chat_ctx = chat_ctx
+        state.session = session
+        state.call_service = call_service
+        state.call_id = call_id
+        state.config = config
+        state.config_source = source
+        state.last_state = agent.state_manager.current_state
+        state.transcript_snapshot = []
+
+        if transcript:
+            # Loaded session — call state_loop.run() directly instead of
+            # agent.run(). agent.run() has an outer while-True that continues
+            # to new states after a state transition, which causes the new
+            # state to generate a greeting.  By using the state loop directly,
+            # we run ONE state and stop.
+
+            # Mark webhook processed so it doesn't overwrite restored dynamic_vars
+            agent.processed_webhook = True
+            agent.webhook_process_task = asyncio.ensure_future(asyncio.sleep(0))
+
+            curr_state = agent.state_manager.current_state
+            curr_state_loop = agent.state_loops[curr_state]
+            last_msg_id = (
+                chat_ctx.items[-1].id if chat_ctx.items else None
+            )
+
+            # Convert loaded messages to frontend-displayable format
+            loaded_messages = _transcript_to_frontend_messages(transcript)
+
+            # IMPORTANT: Tell the UI about the loaded history BEFORE we stream the
+            # "next" assistant message. Otherwise, the UI appends the loaded
+            # transcript *after* the streamed message, which looks like the
+            # conversation "restarted".
+            emit(
+                "config_loaded",
+                call_id=call_id,
+                config_source=source,
+                starting_state=state.agent.state_manager.current_state,
+                first_message="",
+                config=_safe_serialize(config),
+                loaded_messages=loaded_messages,
+            )
+
+            # Seed the transcript snapshot so we only emit tool_calls for NEW
+            # entries produced after resume (prevents re-emitting historical tools).
+            state.transcript_snapshot = _get_full_transcript()
+
+            streaming = False
+            saw_usage = False
+            # On resume, we want exactly ONE assistant continuation message and
+            # then hand control back to the user. In practice, the StateLoop can
+            # make multiple internal LLM calls if the model invokes tools (e.g.
+            # execute_code) which can produce a second message that looks like a
+            # "restart". To prevent that, temporarily disable tools for this
+            # single resume continuation run.
+            original_get_tools = getattr(curr_state_loop, "get_tools", None)
+
+            async def _no_tools(_session):
+                return []
+
+            if original_get_tools is not None:
+                curr_state_loop.get_tools = _no_tools  # type: ignore[method-assign]
+
+            try:
+                async for chunk in curr_state_loop.run(
+                    chat_ctx,
+                    session,
+                    original_last_message_id=last_msg_id,
+                ):
+                    if isinstance(chunk, LLMUsage):
+                        if streaming:
+                            emit("stream_end")
+                            streaming = False
+                        saw_usage = True
+                        continue
+                    if chunk and chunk.delta and chunk.delta.content:
+                        if saw_usage:
+                            _diff_and_emit_tool_calls()
+                            _check_state_change()
+                            saw_usage = False
+                        if not streaming:
+                            emit("stream_start")
+                            streaming = True
+                        emit("stream_chunk", text=chunk.delta.content)
+            finally:
+                if original_get_tools is not None:
+                    curr_state_loop.get_tools = original_get_tools  # type: ignore[method-assign]
+            if streaming:
+                emit("stream_end")
+            _diff_and_emit_tool_calls()
+
+            # Update state if the state loop triggered a transition
+            if curr_state_loop.transitioned_to_state:
+                agent.state_manager.current_state = (
+                    curr_state_loop.transitioned_to_state
+                )
+            _check_state_change()
+
+        else:
+            # Fresh session — add empty user message to trigger greeting
+            state.chat_ctx.add_message(role="user", content="")
+
+            first_message = ""
+            streaming = False
+            saw_usage = False
+            async for chunk in state.agent.run(state.chat_ctx, state.session):
+                if isinstance(chunk, LLMUsage):
+                    if streaming:
+                        emit("stream_end")
+                        streaming = False
+                    saw_usage = True
+                    continue
+                if chunk and chunk.delta and chunk.delta.content:
+                    if saw_usage:
+                        _diff_and_emit_tool_calls()
+                        _check_state_change()
+                        saw_usage = False
+                    if not streaming:
+                        emit("stream_start")
+                        streaming = True
+                    first_message += chunk.delta.content
+                    emit("stream_chunk", text=chunk.delta.content)
+            if streaming:
+                emit("stream_end")
+            _diff_and_emit_tool_calls()
+            _check_state_change()
+
+            emit(
+                "config_loaded",
+                call_id=call_id,
+                config_source=source,
+                starting_state=state.agent.state_manager.current_state,
+                first_message=first_message,
+                config=_safe_serialize(config),
+            )
+    except Exception as e:
+        logger.exception("Failed to initialize agent")
+        emit_error(f"Failed to initialize: {e}", code="INIT_FAILED")
+
+
+async def handle_send_message(data: dict):
+    """Stream a response to a user message."""
+    if not state.agent:
+        emit_error("No active session. Load a config first.", code="NO_SESSION")
+        return
+
+    text = data.get("text", "")
+    streaming = False
+    saw_usage = False
+
+    try:
+        state.chat_ctx.add_message(role="user", content=text)
+        async for chunk in state.agent.run(state.chat_ctx, state.session):
+            if isinstance(chunk, LLMUsage):
+                # End of an LLM call. Tool execution happens in the gap
+                # AFTER this, before the next text chunk arrives.
+                if streaming:
+                    emit("stream_end")
+                    streaming = False
+                saw_usage = True
+                continue
+            if chunk and chunk.delta and chunk.delta.content:
+                # First text after a usage gap — tool calls are now in userdata
+                if saw_usage:
+                    _diff_and_emit_tool_calls()
+                    _check_state_change()
+                    saw_usage = False
+                if not streaming:
+                    emit("stream_start")
+                    streaming = True
+                emit("stream_chunk", text=chunk.delta.content)
+    except Exception as e:
+        logger.exception("Error during streaming")
+        emit_error(f"Streaming error: {e}", code="STREAM_ERROR")
+
+    if streaming:
+        emit("stream_end")
+    # Final check — catches tool calls from the last LLM iteration
+    _diff_and_emit_tool_calls()
+    _check_state_change()
+
+
+async def handle_get_state(_data: dict):
+    if not state.agent:
+        emit_error("No active session", code="NO_SESSION")
+        return
+    emit("state_changed", state=state.agent.state_manager.current_state)
+
+
+async def handle_get_transcript(_data: dict):
+    if not state.agent:
+        emit_error("No active session", code="NO_SESSION")
+        return
+    transcript = _get_full_transcript()
+    emit("transcript", transcript=transcript)
+
+
+async def handle_get_context(_data: dict):
+    """Return the full chat context as the LLM sees it — messages + tool calls."""
+    if not state.agent:
+        emit_error("No active session", code="NO_SESSION")
+        return
+
+    custom_llm_chat_ctx = create_custom_llm_chat_ctx(
+        state.chat_ctx, state.session.userdata
+    )
+    _, transcript_with_tool_calls = convert_chat_ctx_to_openai_format(
+        custom_llm_chat_ctx
+    )
+    emit(
+        "context",
+        messages=transcript_with_tool_calls,
+        dynamic_vars=_safe_serialize(state.agent.state_manager.dynamic_vars),
+        current_state=state.agent.state_manager.current_state,
+    )
+
+
+async def handle_get_prompt(_data: dict):
+    """Return the current assembled system + state prompt with variables substituted."""
+    if not state.agent:
+        emit_error("No active session", code="NO_SESSION")
+        return
+
+    sm = state.agent.state_manager
+    llm_config = state.agent.proagent_llm_config
+
+    prompt = get_state_system_prompt(
+        general_prompt=llm_config.general_prompt,
+        state_prompt=sm.current_state_spec.state_prompt,
+        dynamic_vars=sm.dynamic_vars,
+    )
+    emit(
+        "prompt",
+        prompt=prompt,
+        state=sm.current_state,
+        dynamic_vars=_safe_serialize(sm.dynamic_vars),
+    )
+
+
+async def handle_end_call(_data: dict):
+    if not state.agent:
+        emit_error("No active session", code="NO_SESSION")
+        return
+    transcript = _get_full_transcript()
+    emit("call_ended", transcript=transcript)
+    state.agent = None
+    state.chat_ctx = None
+    state.session = None
+    state.call_service = None
+
+
+async def handle_shutdown(_data: dict):
+    emit("shutdown_ack")
+    # Give the event time to flush
+    await asyncio.sleep(0.05)
+    sys.exit(0)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _check_state_change():
+    """Emit state_changed if the agent state differs from last known."""
+    if not state.agent:
+        return
+    current = state.agent.state_manager.current_state
+    if current != state.last_state:
+        state.last_state = current
+        emit("state_changed", state=current)
+
+
+def _safe_serialize(obj: Any) -> Any:
+    """Make an object JSON-safe (convert non-serializable types to strings)."""
+    if isinstance(obj, dict):
+        return {k: _safe_serialize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_safe_serialize(v) for v in obj]
+    try:
+        json.dumps(obj)
+        return obj
+    except (TypeError, ValueError):
+        return str(obj)
+
+
+# ---------------------------------------------------------------------------
+# Command dispatcher
+# ---------------------------------------------------------------------------
+
+HANDLERS = {
+    "load_config": handle_load_config,
+    "load_config_file": handle_load_config_file,
+    "load_session": handle_load_session,
+    "send_message": handle_send_message,
+    "get_state": handle_get_state,
+    "get_transcript": handle_get_transcript,
+    "get_context": handle_get_context,
+    "get_prompt": handle_get_prompt,
+    "end_call": handle_end_call,
+    "shutdown": handle_shutdown,
+}
+
+
+async def process_line(line: str):
+    """Parse a JSON command and dispatch to the appropriate handler."""
+    line = line.strip()
+    if not line:
+        return
+
+    try:
+        data = json.loads(line)
+    except json.JSONDecodeError as e:
+        emit_error(f"Invalid JSON: {e}", code="INVALID_JSON")
+        return
+
+    command = data.get("command", "")
+    handler = HANDLERS.get(command)
+    if not handler:
+        emit_error(f"Unknown command: {command}", code="UNKNOWN_COMMAND")
+        return
+
+    try:
+        await handler(data)
+    except Exception as e:
+        logger.exception(f"Error handling command '{command}'")
+        emit_error(f"Command error: {e}", code="COMMAND_ERROR")
+
+
+# ---------------------------------------------------------------------------
+# Main loop
+# ---------------------------------------------------------------------------
+
+
+async def main():
+    emit("ready", version=VERSION)
+
+    loop = asyncio.get_event_loop()
+    reader = asyncio.StreamReader()
+    transport, _ = await loop.connect_read_pipe(
+        lambda: asyncio.StreamReaderProtocol(reader), sys.stdin
+    )
+
+    try:
+        while True:
+            line_bytes = await reader.readline()
+            if not line_bytes:
+                break  # EOF — parent process closed stdin
+            line = line_bytes.decode("utf-8", errors="replace")
+            await process_line(line)
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        logger.exception("Unexpected error in main loop")
+        emit_error(f"Fatal: {e}", code="FATAL")
+    finally:
+        transport.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
