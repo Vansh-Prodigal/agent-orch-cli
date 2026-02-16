@@ -99,16 +99,17 @@ if _agent_dir not in sys.path:
 os.chdir(_agent_dir)
 
 # Now safe to import project modules
-from custom_plugins.custom_llm.utils import (  # noqa: E402
-    convert_chat_ctx_to_openai_format,
-    create_custom_llm_chat_ctx,
-)
 from livekit.agents import AgentSession  # noqa: E402
 from livekit.agents.llm import ChatContext  # noqa: E402
 from livekit.agents.llm.chat_context import (  # noqa: E402
     ChatMessage,
     FunctionCall,
     FunctionCallOutput,
+)
+
+from custom_plugins.custom_llm.utils import (  # noqa: E402
+    convert_chat_ctx_to_openai_format,
+    create_custom_llm_chat_ctx,
 )
 from proagent.agent import DynamicVariablesWebhook, ProAgent  # noqa: E402
 from proagent.prompts import get_state_system_prompt  # noqa: E402
@@ -247,9 +248,7 @@ def _parse_transcript(
                     name=function_data.get("name", ""),
                     arguments=function_data.get("arguments", "{}"),
                     created_at=created_at,
-                    pre_tool_call_text_length=item.get(
-                        "pre_tool_call_text_length", 0
-                    ),
+                    pre_tool_call_text_length=item.get("pre_tool_call_text_length", 0),
                 )
 
         elif role == "tool":
@@ -264,9 +263,7 @@ def _parse_transcript(
     return tool_call_ids, tool_call_invocations, tool_call_results
 
 
-def _create_session(
-    chat_ctx: ChatContext, transcript: List[Dict]
-) -> AgentSession:
+def _create_session(chat_ctx: ChatContext, transcript: List[Dict]) -> AgentSession:
     """
     Create a mock AgentSession for text-only simulation.
 
@@ -362,7 +359,8 @@ def _build_chat_ctx_from_openai_messages(messages: List[Dict]) -> ChatContext:
 
     logger.info(
         "Built chat_ctx from %d OpenAI messages → %d items",
-        len(messages), len(chat_ctx.items),
+        len(messages),
+        len(chat_ctx.items),
     )
     return chat_ctx
 
@@ -466,11 +464,18 @@ def _diff_and_emit_tool_calls():
 
     logger.debug(
         "tool_call diff: snapshot_len=%d, current_len=%d, new_entries=%d",
-        old_len, len(current), len(new_entries),
+        old_len,
+        len(current),
+        len(new_entries),
     )
     for i, entry in enumerate(new_entries):
-        logger.debug("  new[%d]: role=%s, has_tool_calls=%s, keys=%s",
-                      i, entry.get("role"), "tool_calls" in entry, list(entry.keys()))
+        logger.debug(
+            "  new[%d]: role=%s, has_tool_calls=%s, keys=%s",
+            i,
+            entry.get("role"),
+            "tool_calls" in entry,
+            list(entry.keys()),
+        )
 
     if not new_entries:
         return
@@ -506,8 +511,9 @@ def _diff_and_emit_tool_calls():
                     "result": results.get(tc_id, ""),
                 }
             )
-        logger.info("Emitting %d tool_calls: %s", len(formatted),
-                     [f["name"] for f in formatted])
+        logger.info(
+            "Emitting %d tool_calls: %s", len(formatted), [f["name"] for f in formatted]
+        )
         emit("tool_calls", tool_calls=formatted)
     else:
         logger.debug("No tool call invocations found in new entries")
@@ -586,9 +592,7 @@ async def handle_load_config(data: dict):
     # get_config_from_db returns {llm_config: {...}, agent_config: {...}, tenant_id: ...}
     db_llm_config = raw_config.get("llm_config", {})
     if not db_llm_config:
-        emit_error(
-            "Remote config has no llm_config", code="CONFIG_MISSING_LLM"
-        )
+        emit_error("Remote config has no llm_config", code="CONFIG_MISSING_LLM")
         return
 
     config = {
@@ -658,9 +662,7 @@ async def handle_load_session(data: dict):
     # Auto-detect format: chat export has "messages" with "index" fields
     messages = session_data.get("messages", [])
     is_chat_export = (
-        len(messages) > 0
-        and isinstance(messages[0], dict)
-        and "index" in messages[0]
+        len(messages) > 0 and isinstance(messages[0], dict) and "index" in messages[0]
     )
 
     # --- Resolve config ---
@@ -681,7 +683,9 @@ async def handle_load_session(data: dict):
     # --- Resolve transcript and metadata ---
     if is_chat_export:
         # Chat export format — strip index fields to get plain transcript
-        transcript = [{k: v for k, v in msg.items() if k != "index"} for msg in messages]
+        transcript = [
+            {k: v for k, v in msg.items() if k != "index"} for msg in messages
+        ]
         current_state = session_data.get("current_state")
         call_id = session_data.get("call_id", generate_call_id())
     else:
@@ -692,7 +696,9 @@ async def handle_load_session(data: dict):
 
     # Apply resume_from: slice transcript up to and including that index
     if resume_from is not None and isinstance(resume_from, int):
-        logger.info(f"resume_from={resume_from}, slicing transcript from {len(transcript)} to {resume_from + 1} messages")
+        logger.info(
+            f"resume_from={resume_from}, slicing transcript from {len(transcript)} to {resume_from + 1} messages"
+        )
         transcript = transcript[: resume_from + 1]
 
     # Inject transcript, state, and dynamic vars into config for reconstruction
@@ -741,10 +747,14 @@ async def _resolve_external_config(data: dict) -> Optional[dict]:
                 call_direction="inbound",
             )
         except Exception as e:
-            emit_error(f"Failed to fetch remote config: {e}", code="CONFIG_FETCH_FAILED")
+            emit_error(
+                f"Failed to fetch remote config: {e}", code="CONFIG_FETCH_FAILED"
+            )
             return None
         if not raw_config or not raw_config.get("llm_config"):
-            emit_error("No config returned for that phone number", code="CONFIG_NOT_FOUND")
+            emit_error(
+                "No config returned for that phone number", code="CONFIG_NOT_FOUND"
+            )
             return None
         return {
             "tenant_id": raw_config.get("tenant_id", ""),
@@ -837,9 +847,7 @@ async def _init_agent(config: dict, call_id: str, source: str):
 
             curr_state = agent.state_manager.current_state
             curr_state_loop = agent.state_loops[curr_state]
-            last_msg_id = (
-                chat_ctx.items[-1].id if chat_ctx.items else None
-            )
+            last_msg_id = chat_ctx.items[-1].id if chat_ctx.items else None
 
             # Convert loaded messages to frontend-displayable format
             loaded_messages = _transcript_to_frontend_messages(transcript)
