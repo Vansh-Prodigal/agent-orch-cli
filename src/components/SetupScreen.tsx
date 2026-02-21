@@ -10,6 +10,8 @@ interface Props {
   onLoadFile: (path: string) => void;
   initialToNumber?: string;
   initialConfigPath?: string;
+  logs?: string[];
+  verbose?: boolean;
 }
 
 export function SetupScreen({
@@ -17,6 +19,8 @@ export function SetupScreen({
   onLoadFile,
   initialToNumber,
   initialConfigPath,
+  logs = [],
+  verbose = false,
 }: Props) {
   const [mode, setMode] = useState<ConfigMode>(
     initialToNumber
@@ -38,12 +42,35 @@ export function SetupScreen({
   }, []);
 
   if (initialToNumber || initialConfigPath) {
+    const displayLines = verbose ? logs.slice(-12) : [];
     return (
       <Box flexDirection="column" padding={1}>
         <Text color={theme.primary} bold>
           ProAgent CLI
         </Text>
         <Text color={theme.muted}>Loading configuration...</Text>
+        <Text color={theme.muted} dimColor>
+          Press Ctrl+L to view backend logs.
+        </Text>
+        {verbose && (
+          <>
+            <Text />
+            <Text color={theme.muted} dimColor>
+              Verbose mode enabled. Showing backend logs (tail).
+            </Text>
+            {displayLines.length > 0 ? (
+              displayLines.map((line, i) => (
+                <Text key={i} color={theme.muted} dimColor wrap="truncate">
+                  {line}
+                </Text>
+              ))
+            ) : (
+              <Text color={theme.muted} dimColor>
+                No logs yet. (Press Ctrl+L to open full log viewer.)
+              </Text>
+            )}
+          </>
+        )}
       </Box>
     );
   }

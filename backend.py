@@ -44,6 +44,12 @@ from copy import deepcopy
 from typing import Any, Dict, List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
+# Verbose mode (CLI-only)
+# ---------------------------------------------------------------------------
+
+_CLI_VERBOSE = os.environ.get("PROAGENT_CLI_VERBOSE", "").lower() in ("1", "true", "yes", "y")
+
+# ---------------------------------------------------------------------------
 # Redirect ALL output to stderr BEFORE importing anything from agent_orchestrator
 # ---------------------------------------------------------------------------
 
@@ -65,7 +71,7 @@ builtins.print = _stderr_print
 
 # Configure root logger → stderr
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG if _CLI_VERBOSE else logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     stream=sys.stderr,
     force=True,
@@ -119,10 +125,15 @@ from schemas.events import (  # noqa: E402
     ToolCallInvocationResponse,
     ToolCallResultResponse,
 )
-from schemas.types import CallDirection, LLMUsage, ProAgentLLMConfig  # noqa: E402
+from schemas.types import (  # noqa: E402
+    CallDirection,
+    LLMTTFT,
+    LLMUsage,
+    ProAgentLLMConfig,
+)
 
 logger = logging.getLogger("cli_backend")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG if _CLI_VERBOSE else logging.INFO)
 
 VERSION = "0.2.0"
 
@@ -281,10 +292,6 @@ def _create_session(chat_ctx: ChatContext, transcript: List[Dict]) -> AgentSessi
     )
 
     session = AgentSession[AgentSessionUserData](
-        stt=None,
-        llm=None,
-        tts=None,
-        vad=None,
         userdata=userdata,
         turn_detection="manual",
         allow_interruptions=False,
@@ -575,10 +582,28 @@ async def handle_load_config(data: dict):
     call_id = generate_call_id()
 
     try:
+        logger.debug(
+            {
+                "event": "cli.load_config.start",
+                "call_id": call_id,
+                "to_number": to_number,
+                "from_number": from_number,
+                "call_direction": call_direction,
+                "has_overrides": bool(config_overrides),
+            }
+        )
         raw_config = await get_config_from_db(
             phone_number=to_number,
             call_id=call_id,
             call_direction=call_direction,
+        )
+        logger.debug(
+            {
+                "event": "cli.load_config.fetched",
+                "call_id": call_id,
+                "has_raw_config": bool(raw_config),
+                "raw_config_keys": list(raw_config.keys()) if isinstance(raw_config, dict) else None,
+            }
         )
     except Exception as e:
         emit_error(f"Failed to fetch remote config: {e}", code="CONFIG_FETCH_FAILED")
@@ -606,6 +631,7 @@ async def handle_load_config(data: dict):
 
     source = "remote"
     if config_overrides:
+        logger.debug({"event": "cli.load_config.apply_overrides", "call_id": call_id})
         config = deep_merge(config, config_overrides)
         source = "merged"
 
@@ -777,6 +803,14 @@ async def _resolve_external_config(data: dict) -> Optional[dict]:
 async def _init_agent(config: dict, call_id: str, source: str):
     """Create a ProAgent directly and emit config_loaded."""
     try:
+        logger.debug(
+            {
+                "event": "cli.init_agent.start",
+                "call_id": call_id,
+                "source": source,
+                "starting_state_override": config.get("current_state"),
+            }
+        )
         # Build ProAgent (inlined from ChatSimulatorCore.__init__)
         call_service = MockCallService()
         dynamic_variables_webhook = DynamicVariablesWebhook(
@@ -814,11 +848,13 @@ async def _init_agent(config: dict, call_id: str, source: str):
         transcript = config.get("transcript", [])
 
         if transcript:
+            logger.debug({"event": "cli.init_agent.resume_mode", "call_id": call_id, "transcript_len": len(transcript)})
             # Loaded session — build chat_ctx directly from the OpenAI-format
             # messages so they pass through create_custom_llm_chat_ctx unchanged.
             chat_ctx = _build_chat_ctx_from_openai_messages(transcript)
             session = _create_session(ChatContext.empty(), [])  # empty userdata
         else:
+            logger.debug({"event": "cli.init_agent.fresh_mode", "call_id": call_id})
             # Fresh session
             chat_ctx = ChatContext.empty()
             session = _create_session(chat_ctx, [])
@@ -892,6 +928,16 @@ async def _init_agent(config: dict, call_id: str, source: str):
                     session,
                     original_last_message_id=last_msg_id,
                 ):
+                    if isinstance(chunk, LLMTTFT):
+                        if _CLI_VERBOSE:
+                            logger.debug(
+                                {
+                                    "event": "cli.llm_ttft",
+                                    "call_id": call_id,
+                                    "ttft_seconds": chunk.ttft,
+                                }
+                            )
+                        continue
                     if isinstance(chunk, LLMUsage):
                         if streaming:
                             emit("stream_end")
@@ -928,7 +974,37 @@ async def _init_agent(config: dict, call_id: str, source: str):
             first_message = ""
             streaming = False
             saw_usage = False
+            tick_task: asyncio.Task | None = None
+            if _CLI_VERBOSE:
+                async def _tick():
+                    waited = 0
+                    while True:
+                        await asyncio.sleep(2)
+                        waited += 2
+                        logger.debug(
+                            {
+                                "event": "cli.init_agent.waiting_for_first_output",
+                                "call_id": call_id,
+                                "waited_seconds": waited,
+                            }
+                        )
+
+                tick_task = asyncio.create_task(_tick())
+
             async for chunk in state.agent.run(state.chat_ctx, state.session):
+                if tick_task:
+                    tick_task.cancel()
+                    tick_task = None
+                if isinstance(chunk, LLMTTFT):
+                    if _CLI_VERBOSE:
+                        logger.debug(
+                            {
+                                "event": "cli.llm_ttft",
+                                "call_id": call_id,
+                                "ttft_seconds": chunk.ttft,
+                            }
+                        )
+                    continue
                 if isinstance(chunk, LLMUsage):
                     if streaming:
                         emit("stream_end")
@@ -976,6 +1052,16 @@ async def handle_send_message(data: dict):
     try:
         state.chat_ctx.add_message(role="user", content=text)
         async for chunk in state.agent.run(state.chat_ctx, state.session):
+            if isinstance(chunk, LLMTTFT):
+                if _CLI_VERBOSE:
+                    logger.debug(
+                        {
+                            "event": "cli.llm_ttft",
+                            "call_id": state.call_id,
+                            "ttft_seconds": chunk.ttft,
+                        }
+                    )
+                continue
             if isinstance(chunk, LLMUsage):
                 # End of an LLM call. Tool execution happens in the gap
                 # AFTER this, before the next text chunk arrives.

@@ -17,6 +17,7 @@ const cli = meow(
     --load-session, -l   Path to a saved session or chat export to resume
     --python, -p         Path to Python interpreter
     --project-root       Path to project root (default: auto-detect)
+    --verbose, -v        Show verbose backend debug logs
 
   Examples
     $ proagent --to-number +12025551234
@@ -56,6 +57,11 @@ const cli = meow(
       projectRoot: {
         type: "string",
       },
+      verbose: {
+        type: "boolean",
+        shortFlag: "v",
+        default: false,
+      },
     },
   },
 );
@@ -69,5 +75,6 @@ render(
     loadSessionPath={cli.flags.loadSession}
     pythonPath={cli.flags.python}
     projectRoot={cli.flags.projectRoot}
+    verbose={cli.flags.verbose}
   />,
 );

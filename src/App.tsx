@@ -52,6 +52,7 @@ export interface AppProps {
   loadSessionPath?: string;
   pythonPath?: string;
   projectRoot?: string;
+  verbose?: boolean;
 }
 
 export function App({
@@ -62,6 +63,7 @@ export function App({
   loadSessionPath,
   pythonPath,
   projectRoot,
+  verbose = false,
 }: AppProps) {
   const { exit } = useApp();
   const [phase, setPhase] = useState<Phase>("waiting");
@@ -193,6 +195,7 @@ export function App({
   const agent = useAgent({
     pythonPath,
     cwd: projectRoot,
+    verbose,
     onEvent,
     onStderr: logs.addLine,
     onExit: (code) => {
@@ -337,10 +340,24 @@ export function App({
     onShowContext: handleShowContext,
     onShowPrompt: handleExportPrompt,
     onToggleBatch: handleToggleBatch,
-    enabled: phase === "chatting" || phase === "ended",
+    enabled: phase !== "waiting",
   });
 
   // --- Render ---
+
+  // Always allow the log overlay, even during setup/loading.
+  if (showLogs) {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <LogViewer lines={logs.lines} visible />
+        <Box>
+          <Text color={theme.muted} dimColor>
+            Escape close  |  Ctrl+L logs  Ctrl+C exit
+          </Text>
+        </Box>
+      </Box>
+    );
+  }
 
   if (phase === "waiting") {
     return (
@@ -360,6 +377,8 @@ export function App({
         onLoadFile={handleLoadFile}
         initialToNumber={toNumber}
         initialConfigPath={configPath}
+        logs={logs.lines}
+        verbose={verbose}
       />
     );
   }
@@ -380,21 +399,6 @@ export function App({
         {chat.lastError && (
           <Text color={theme.error}>Last error: {chat.lastError}</Text>
         )}
-      </Box>
-    );
-  }
-
-  // phase === "chatting"
-  // Logs use an exclusive overlay (live-updating, different from context)
-  if (showLogs) {
-    return (
-      <Box flexDirection="column" flexGrow={1}>
-        <LogViewer lines={logs.lines} visible />
-        <Box>
-          <Text color={theme.muted} dimColor>
-            Escape close  |  Ctrl+L logs  Ctrl+C exit
-          </Text>
-        </Box>
       </Box>
     );
   }

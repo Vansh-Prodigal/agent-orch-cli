@@ -9,6 +9,7 @@ import type { BackendEvent, Command } from "../protocol/types.js";
 export interface UseAgentOptions {
   pythonPath?: string;
   cwd?: string;
+  verbose?: boolean;
   onEvent: (event: BackendEvent) => void;
   onStderr: (line: string) => void;
   onExit: (code: number | null) => void;
@@ -20,6 +21,7 @@ export interface UseAgentOptions {
 export function useAgent({
   pythonPath,
   cwd,
+  verbose,
   onEvent,
   onStderr,
   onExit,
@@ -43,7 +45,12 @@ export function useAgent({
     const proc = spawn(python, [backendPath], {
       cwd: agentDir,
       stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env },
+      env: {
+        ...process.env,
+        // Ensure Python flushes logs promptly so we can see progress while loading.
+        PYTHONUNBUFFERED: "1",
+        ...(verbose ? { PROAGENT_CLI_VERBOSE: "1" } : {}),
+      },
     });
 
     procRef.current = proc;
@@ -87,7 +94,7 @@ export function useAgent({
         proc.kill("SIGTERM");
       }
     };
-  }, [pythonPath, cwd]);
+  }, [pythonPath, cwd, verbose]);
 
   const sendCommand = useCallback((cmd: Command) => {
     const proc = procRef.current;
