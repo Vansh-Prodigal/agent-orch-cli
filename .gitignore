@@ -7,3 +7,5 @@ exports/prompts/*
 exports/chats/*
 exports/sessions/*
 !exports/**/.gitkeep
+
+__pycache__

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Box, Text } from "ink";
 import TextInput from "ink-text-input";
 import { theme } from "../theme.js";
+import { digitsToWords } from "../utils/digitsToWords.js";
 
 interface Props {
   onSubmit: (text: string) => void;
@@ -28,8 +29,7 @@ export function InputBar({
 
   const handleChange = (val: string) => {
     // Strip control characters that may leak from ctrl+key shortcuts
-    const filtered = val.replace(/[\x00-\x1f]/g, "");
-    setValue(filtered);
+    setValue(val.replace(/[\x00-\x1f]/g, ""));
   };
 
   const handleSubmit = (text: string) => {
@@ -41,10 +41,11 @@ export function InputBar({
       }
       return;
     }
+    const converted = digitsToWords(trimmed);
     if (batchMode) {
-      onBatchAdd(trimmed);
+      onBatchAdd(converted);
     } else {
-      onSubmit(trimmed);
+      onSubmit(converted);
     }
     setValue("");
   };
