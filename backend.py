@@ -974,6 +974,9 @@ async def _init_agent(config: dict, call_id: str, source: str):
             first_message = ""
             streaming = False
             saw_usage = False
+            # Track text segments for post-transition reconciliation
+            current_segment: List[str] = []
+            last_complete_segment: str = ""
             tick_task: asyncio.Task | None = None
             if _CLI_VERBOSE:
                 async def _tick():
@@ -1009,6 +1012,9 @@ async def _init_agent(config: dict, call_id: str, source: str):
                     if streaming:
                         emit("stream_end")
                         streaming = False
+                    if current_segment:
+                        last_complete_segment = "".join(current_segment)
+                        current_segment = []
                     saw_usage = True
                     continue
                 if chunk and chunk.delta and chunk.delta.content:
@@ -1020,11 +1026,15 @@ async def _init_agent(config: dict, call_id: str, source: str):
                         emit("stream_start")
                         streaming = True
                     first_message += chunk.delta.content
+                    current_segment.append(chunk.delta.content)
                     emit("stream_chunk", text=chunk.delta.content)
             if streaming:
                 emit("stream_end")
+            if current_segment:
+                last_complete_segment = "".join(current_segment)
             _diff_and_emit_tool_calls()
             _check_state_change()
+            _reconcile_chat_ctx(last_complete_segment)
 
             emit(
                 "config_loaded",
@@ -1048,6 +1058,11 @@ async def handle_send_message(data: dict):
     text = data.get("text", "")
     streaming = False
     saw_usage = False
+    # Track text for the current streaming segment so we can reconcile
+    # the chat context after a state transition (the state_loop may not
+    # add post-transition text to the context).
+    current_segment: List[str] = []
+    last_complete_segment: str = ""
 
     try:
         state.chat_ctx.add_message(role="user", content=text)
@@ -1068,6 +1083,10 @@ async def handle_send_message(data: dict):
                 if streaming:
                     emit("stream_end")
                     streaming = False
+                # Save the completed segment
+                if current_segment:
+                    last_complete_segment = "".join(current_segment)
+                    current_segment = []
                 saw_usage = True
                 continue
             if chunk and chunk.delta and chunk.delta.content:
@@ -1079,6 +1098,7 @@ async def handle_send_message(data: dict):
                 if not streaming:
                     emit("stream_start")
                     streaming = True
+                current_segment.append(chunk.delta.content)
                 emit("stream_chunk", text=chunk.delta.content)
     except Exception as e:
         logger.exception("Error during streaming")
@@ -1086,9 +1106,18 @@ async def handle_send_message(data: dict):
 
     if streaming:
         emit("stream_end")
+    # Save any trailing segment (text after last LLMUsage)
+    if current_segment:
+        last_complete_segment = "".join(current_segment)
     # Final check — catches tool calls from the last LLM iteration
     _diff_and_emit_tool_calls()
     _check_state_change()
+
+    # Reconcile: when agent.run() spans multiple states
+    # (continue_after_transition), the post-transition state's text may
+    # not be added to the chat context by state_loop.  Patch the gap so
+    # subsequent turns see the full conversation.
+    _reconcile_chat_ctx(last_complete_segment)
 
 
 async def handle_get_state(_data: dict):
@@ -1180,6 +1209,31 @@ def _check_state_change():
     if current != state.last_state:
         state.last_state = current
         emit("state_changed", state=current)
+
+
+def _reconcile_chat_ctx(last_segment: str):
+    """Ensure the last streamed text is present in the chat context.
+
+    After a state transition with continuation, state_loop may not append
+    the new state's generated text to the chat context.  Detect the gap
+    and add a new assistant message so subsequent agent.run() calls see it.
+    """
+    if not last_segment or not last_segment.strip() or not state.chat_ctx:
+        return
+
+    # Walk backwards to find the last assistant message
+    for item in reversed(state.chat_ctx.items):
+        if hasattr(item, "role") and item.role == "assistant":
+            if last_segment in (item.content[0] if item.content else ""):
+                return  # Already present — nothing to do
+            break  # Last assistant msg doesn't contain the text — need to add
+
+    # The last streamed segment is missing from the context — add it
+    state.chat_ctx.add_message(role="assistant", content=last_segment)
+    logger.info(
+        "Reconciled chat context: added missing post-transition text (%d chars)",
+        len(last_segment),
+    )
 
 
 def _safe_serialize(obj: Any) -> Any:
