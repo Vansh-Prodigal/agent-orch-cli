@@ -52,6 +52,11 @@ export interface ShutdownCommand {
   command: "shutdown";
 }
 
+export interface RewindCommand {
+  command: "rewind";
+  index: number;
+}
+
 export type Command =
   | LoadConfigCommand
   | LoadConfigFileCommand
@@ -62,7 +67,8 @@ export type Command =
   | GetContextCommand
   | GetPromptCommand
   | EndCallCommand
-  | ShutdownCommand;
+  | ShutdownCommand
+  | RewindCommand;
 
 // ---------------------------------------------------------------------------
 // Events (Python → Ink via stdout)
@@ -149,6 +155,13 @@ export interface ErrorEvent {
   code?: string;
 }
 
+export interface RewindCompleteEvent {
+  event: "rewind_complete";
+  loaded_messages: LoadedMessage[];
+  current_state: string;
+  dynamic_vars: Record<string, unknown>;
+}
+
 export interface ShutdownAckEvent {
   event: "shutdown_ack";
 }
@@ -166,6 +179,7 @@ export type BackendEvent =
   | CallEndedEvent
   | TranscriptEvent
   | ErrorEvent
+  | RewindCompleteEvent
   | ShutdownAckEvent;
 
 // ---------------------------------------------------------------------------

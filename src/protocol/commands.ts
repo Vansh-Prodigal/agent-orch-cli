@@ -8,6 +8,7 @@ import type {
   LoadConfigCommand,
   LoadConfigFileCommand,
   LoadSessionCommand,
+  RewindCommand,
   SendMessageCommand,
   ShutdownCommand,
 } from "./types.js";
@@ -72,6 +73,10 @@ export function endCall(): EndCallCommand {
 
 export function shutdown(): ShutdownCommand {
   return { command: "shutdown" };
+}
+
+export function rewind(index: number): RewindCommand {
+  return { command: "rewind", index };
 }
 
 export function serialize(cmd: Command): string {
