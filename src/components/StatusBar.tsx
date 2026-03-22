@@ -7,6 +7,7 @@ interface Props {
   callId: string;
   configSource: string;
   isStreaming: boolean;
+  rewindMode?: boolean;
 }
 
 export function StatusBar({
@@ -14,13 +15,17 @@ export function StatusBar({
   callId,
   configSource,
   isStreaming,
+  rewindMode,
 }: Props) {
   return (
-    <Box borderStyle="single" borderColor={theme.muted} paddingX={1}>
+    <Box
+      borderStyle="single"
+      borderColor={theme.muted}
+      paddingX={1}
+      width="100%"
+    >
       <Text>
-        <Text color={theme.warning} dimColor>
-          [state: {currentState || "—"}]
-        </Text>
+        <Text color={theme.warning}>[state: {currentState || "—"}]</Text>
         {"  "}
         <Text color={theme.muted} dimColor>
           [call_id: {callId || "—"}]
@@ -34,6 +39,14 @@ export function StatusBar({
             {"  "}
             <Text color={theme.primary} dimColor>
               [streaming...]
+            </Text>
+          </>
+        )}
+        {rewindMode && (
+          <>
+            {"  "}
+            <Text color={theme.warning} bold>
+              [REWIND]
             </Text>
           </>
         )}
