@@ -10,6 +10,7 @@ export interface KeyboardActions {
   onShowPrompt: () => void;
   onToggleBatch: () => void;
   onRewind: () => void;
+  onToggleAutopilot: () => void;
   enabled: boolean;
 }
 
@@ -23,6 +24,7 @@ export interface KeyboardActions {
  * Ctrl+P  -> export prompt to markdown file
  * Ctrl+B  -> toggle batch input mode
  * Ctrl+R  -> enter rewind mode
+ * Ctrl+A  -> disable autopilot
  * Escape  -> close overlay / cancel
  */
 export function useKeyboard({
@@ -35,6 +37,7 @@ export function useKeyboard({
   onShowPrompt,
   onToggleBatch,
   onRewind,
+  onToggleAutopilot,
   enabled,
 }: KeyboardActions) {
   useInput(
@@ -55,6 +58,8 @@ export function useKeyboard({
         onToggleBatch();
       } else if (key.ctrl && input === "r") {
         onRewind();
+      } else if (key.ctrl && input === "a") {
+        onToggleAutopilot();
       } else if (key.escape) {
         onEscape();
       }

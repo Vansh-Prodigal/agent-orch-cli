@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Box, Text } from "ink";
 import TextInput from "ink-text-input";
 import { theme, glyph } from "../theme.js";
@@ -13,6 +13,7 @@ interface Props {
   onBatchAdd: (line: string) => void;
   onBatchSend: () => void;
   focus?: boolean;
+  autopilotValue?: string | null;
 }
 
 export function InputBar({
@@ -24,8 +25,16 @@ export function InputBar({
   onBatchAdd,
   onBatchSend,
   focus = true,
+  autopilotValue,
 }: Props) {
   const [value, setValue] = useState("");
+
+  // Auto-populate input when autopilot provides a value
+  useEffect(() => {
+    if (autopilotValue != null && autopilotValue !== "") {
+      setValue(autopilotValue);
+    }
+  }, [autopilotValue]);
 
   const handleChange = (val: string) => {
     // Strip control characters that may leak from ctrl+key shortcuts
