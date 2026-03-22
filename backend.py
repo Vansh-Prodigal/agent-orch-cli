@@ -119,7 +119,11 @@ from custom_plugins.custom_llm.utils import (  # noqa: E402
 )
 from proagent.agent import DynamicVariablesWebhook, ProAgent  # noqa: E402
 from proagent.prompts import get_state_system_prompt  # noqa: E402
-from proagent.utils import get_config_from_db  # noqa: E402
+from proagent.utils import (  # noqa: E402
+    get_config_from_db,
+    check_if_state_transition_tool,
+    get_state_name_from_tool_name,
+)
 from schemas.events import (  # noqa: E402
     AgentSessionUserData,
     ToolCallInvocationResponse,
@@ -389,6 +393,10 @@ class BackendState:
         self.last_state: Optional[str] = None
         # Track transcript length to diff tool calls after each turn
         self.transcript_snapshot: List[Dict] = []
+        # Rewind support: state & dynamic vars tracking
+        # Each entry: (transcript_len, value) recorded at turn boundaries and state changes
+        self.state_timeline: List[Tuple[int, str]] = []  # (transcript_len, state_name)
+        self.dynamic_vars_snapshots: List[Tuple[int, Dict[str, Any]]] = []  # (transcript_len, vars_copy)
 
 
 state = BackendState()
@@ -800,6 +808,90 @@ async def _resolve_external_config(data: dict) -> Optional[dict]:
         return None
 
 
+def _rebuild_state_timeline_from_transcript(
+    transcript: List[Dict], starting_state: str
+) -> List[Tuple[int, str]]:
+    """Reconstruct state timeline by scanning transcript for transition tool calls.
+
+    State transitions use tools prefixed with "transition_to_" (e.g. transition_to_conversation).
+    Also handles conditional edge transitions that inject synthetic tool calls.
+    Returns a list of (transcript_index, state_name) entries.
+    """
+    timeline: List[Tuple[int, str]] = [(0, starting_state)]
+
+    for i, msg in enumerate(transcript):
+        role = msg.get("role")
+        # Check assistant messages for transition tool calls
+        if role in ("assistant", "agent"):
+            for tc in msg.get("tool_calls", []):
+                func = tc.get("function", {})
+                tool_name = func.get("name", "")
+                if check_if_state_transition_tool(tool_name):
+                    new_state = get_state_name_from_tool_name(tool_name)
+                    if new_state:
+                        timeline.append((i + 1, new_state))
+        # Also check tool results that mention transitions (synthetic edges)
+        elif role == "tool":
+            content = msg.get("content", "")
+            if content and "Transitioned to" in content:
+                # Format: 'Transitioned to "state_name" state'
+                try:
+                    new_state = content.split('"')[1]
+                    if new_state:
+                        timeline.append((i + 1, new_state))
+                except (IndexError, ValueError):
+                    pass
+
+    logger.info(
+        "Rebuilt state timeline from transcript (%d messages): %s",
+        len(transcript),
+        [(t, s) for t, s in timeline],
+    )
+    return timeline
+
+
+def _build_agent(config: dict, call_id: str) -> Tuple[ProAgent, MockCallService]:
+    """Create a fresh ProAgent and MockCallService from config.
+
+    Handles current_state and dynamic_vars overrides from config.
+    Returns (agent, call_service).
+    """
+    call_service = MockCallService()
+    dynamic_variables_webhook = DynamicVariablesWebhook(
+        call_id=call_id,
+        tenant_id=config["tenant_id"],
+        from_number=config["from_number"],
+        to_number=config["to_number"],
+        call_direction=CallDirection(config["call_direction"]),
+        llm_config=ProAgentLLMConfig(**config["llm_config"]),
+        metadata=config.get("metadata", {}),
+        should_prefetch_webhook_data=False,
+    )
+    agent = ProAgent(
+        call_id=call_id,
+        tenant_id=config["tenant_id"],
+        from_number=config["from_number"],
+        to_number=config["to_number"],
+        call_direction=CallDirection(config["call_direction"]),
+        proagent_llm_config=ProAgentLLMConfig(**config["llm_config"]),
+        call_service=call_service,
+        metadata=config.get("metadata", {}),
+        dynamic_variables_webhook=dynamic_variables_webhook,
+    )
+
+    # Handle current_state override
+    if "current_state" in config:
+        logger.info(f"Setting current state to {config['current_state']}")
+        agent.state_manager.current_state = config["current_state"]
+
+    # Restore dynamic variables if present (from chat export / session / rewind)
+    if "dynamic_vars" in config and config["dynamic_vars"]:
+        logger.info("Restoring %d dynamic variables", len(config["dynamic_vars"]))
+        agent.state_manager.dynamic_vars.update(config["dynamic_vars"])
+
+    return agent, call_service
+
+
 async def _init_agent(config: dict, call_id: str, source: str):
     """Create a ProAgent directly and emit config_loaded."""
     try:
@@ -811,39 +903,7 @@ async def _init_agent(config: dict, call_id: str, source: str):
                 "starting_state_override": config.get("current_state"),
             }
         )
-        # Build ProAgent (inlined from ChatSimulatorCore.__init__)
-        call_service = MockCallService()
-        dynamic_variables_webhook = DynamicVariablesWebhook(
-            call_id=call_id,
-            tenant_id=config["tenant_id"],
-            from_number=config["from_number"],
-            to_number=config["to_number"],
-            call_direction=CallDirection(config["call_direction"]),
-            llm_config=ProAgentLLMConfig(**config["llm_config"]),
-            metadata=config.get("metadata", {}),
-            should_prefetch_webhook_data=False,
-        )
-        agent = ProAgent(
-            call_id=call_id,
-            tenant_id=config["tenant_id"],
-            from_number=config["from_number"],
-            to_number=config["to_number"],
-            call_direction=CallDirection(config["call_direction"]),
-            proagent_llm_config=ProAgentLLMConfig(**config["llm_config"]),
-            call_service=call_service,
-            metadata=config.get("metadata", {}),
-            dynamic_variables_webhook=dynamic_variables_webhook,
-        )
-
-        # Handle current_state override (must happen before session creation)
-        if "current_state" in config:
-            logger.info(f"Setting current state to {config['current_state']}")
-            agent.state_manager.current_state = config["current_state"]
-
-        # Restore dynamic variables if present (from chat export / session)
-        if "dynamic_vars" in config and config["dynamic_vars"]:
-            logger.info("Restoring %d dynamic variables", len(config["dynamic_vars"]))
-            agent.state_manager.dynamic_vars.update(config["dynamic_vars"])
+        agent, call_service = _build_agent(config, call_id)
 
         transcript = config.get("transcript", [])
 
@@ -869,6 +929,20 @@ async def _init_agent(config: dict, call_id: str, source: str):
         state.config_source = source
         state.last_state = agent.state_manager.current_state
         state.transcript_snapshot = []
+        # Seed rewind timeline — rebuild from transcript if resuming a session,
+        # otherwise just record the starting state.
+        if transcript:
+            # Determine the starting state of the conversation (before any transitions).
+            # The config's llm_config has the starting_state, which is the state before
+            # any transitions occurred in the original conversation.
+            llm_config = config.get("llm_config", {})
+            original_starting_state = llm_config.get("starting_state", agent.state_manager.current_state)
+            state.state_timeline = _rebuild_state_timeline_from_transcript(
+                transcript, original_starting_state
+            )
+        else:
+            state.state_timeline = [(0, agent.state_manager.current_state)]
+        state.dynamic_vars_snapshots = [(0, deepcopy(agent.state_manager.dynamic_vars))]
 
         if transcript:
             # Loaded session — call state_loop.run() directly instead of
@@ -967,6 +1041,9 @@ async def _init_agent(config: dict, call_id: str, source: str):
                 )
             _check_state_change()
 
+            # Record turn-end state for rewind support
+            _record_turn_end()
+
         else:
             # Fresh session — add empty user message to trigger greeting
             state.chat_ctx.add_message(role="user", content="")
@@ -1035,6 +1112,9 @@ async def _init_agent(config: dict, call_id: str, source: str):
             _diff_and_emit_tool_calls()
             _check_state_change()
             _reconcile_chat_ctx(last_complete_segment)
+
+            # Record turn-end state for rewind support
+            _record_turn_end()
 
             emit(
                 "config_loaded",
@@ -1119,6 +1199,13 @@ async def handle_send_message(data: dict):
     # subsequent turns see the full conversation.
     _reconcile_chat_ctx(last_complete_segment)
 
+    # Record turn-end state and dynamic vars for rewind support
+    _record_turn_end()
+    if state.agent:
+        transcript_len = len(_get_full_transcript())
+        dv_copy = deepcopy(state.agent.state_manager.dynamic_vars)
+        state.dynamic_vars_snapshots.append((transcript_len, dv_copy))
+
 
 async def handle_get_state(_data: dict):
     if not state.agent:
@@ -1189,6 +1276,116 @@ async def handle_end_call(_data: dict):
     state.call_service = None
 
 
+async def handle_rewind(data: dict):
+    """Rewind conversation to a specific transcript index.
+
+    Recreates the ProAgent from scratch to ensure all internal state
+    (state loops, PII verification stages, etc.) is completely fresh.
+    """
+    if not state.agent or not state.config:
+        emit_error("No active session. Load a config first.", code="NO_SESSION")
+        return
+
+    index = data.get("index")
+    if index is None or not isinstance(index, int) or index < 0:
+        emit_error("Invalid rewind index", code="INVALID_REWIND_INDEX")
+        return
+
+    try:
+        # 1. Get the full transcript and validate index
+        full_transcript = _get_full_transcript()
+        if index >= len(full_transcript):
+            emit_error(
+                f"Rewind index {index} out of range (transcript has {len(full_transcript)} messages)",
+                code="REWIND_INDEX_OUT_OF_RANGE",
+            )
+            return
+
+        # 2. Validate target is a user or assistant message
+        target_role = full_transcript[index].get("role")
+        if target_role not in ("user", "assistant", "agent"):
+            emit_error(
+                f"Cannot rewind to a '{target_role}' message. Select a user or assistant message.",
+                code="REWIND_INVALID_TARGET",
+            )
+            return
+
+        # 3. If the target assistant message has tool_calls, extend past
+        #    the subsequent tool-result messages to keep the sequence intact.
+        end_index = index + 1
+        if target_role in ("assistant", "agent") and full_transcript[index].get("tool_calls"):
+            while end_index < len(full_transcript) and full_transcript[end_index].get("role") == "tool":
+                end_index += 1
+
+        truncated_transcript = full_transcript[:end_index]
+
+        # 4. Determine the correct state for this point in history
+        target_state = state.state_timeline[0][1] if state.state_timeline else state.agent.state_manager.current_state
+        for tlen, sname in state.state_timeline:
+            if tlen <= end_index:
+                target_state = sname
+            else:
+                break
+
+        # 5. Determine the correct dynamic_vars for this point
+        target_dynamic_vars = state.dynamic_vars_snapshots[0][1] if state.dynamic_vars_snapshots else {}
+        for tlen, dv in state.dynamic_vars_snapshots:
+            if tlen <= end_index:
+                target_dynamic_vars = dv
+            else:
+                break
+
+        # 6. Recreate the ProAgent from scratch — this ensures ALL internal
+        #    state (state loops, PII stages, cached tools, etc.) is fresh.
+        rewind_config = deepcopy(state.config)
+        rewind_config["current_state"] = target_state
+        rewind_config["dynamic_vars"] = deepcopy(target_dynamic_vars)
+
+        agent, call_service = _build_agent(rewind_config, state.call_id)
+
+        # Prevent webhook from overwriting restored dynamic_vars on next run
+        agent.processed_webhook = True
+        agent.webhook_process_task = asyncio.ensure_future(asyncio.sleep(0))
+
+        # 7. Rebuild chat_ctx from truncated transcript
+        new_chat_ctx = _build_chat_ctx_from_openai_messages(truncated_transcript)
+
+        # 8. Update global state with the fresh agent
+        state.agent = agent
+        state.call_service = call_service
+        state.chat_ctx = new_chat_ctx
+        state.session = _create_session(ChatContext.empty(), [])
+        state.last_state = target_state
+        # Use the truncated transcript directly as the snapshot — avoids
+        # format mismatches from roundtripping through chat_ctx + empty userdata
+        # which can produce a different entry count, breaking tool call diffing.
+        state.transcript_snapshot = list(truncated_transcript)
+
+        # 9. Prune timeline entries beyond the rewind point
+        state.state_timeline = [(t, s) for t, s in state.state_timeline if t <= end_index]
+        state.dynamic_vars_snapshots = [(t, d) for t, d in state.dynamic_vars_snapshots if t <= end_index]
+
+        # 10. Emit rewind_complete with truncated messages for frontend display
+        loaded_messages = _transcript_to_frontend_messages(truncated_transcript)
+        emit(
+            "rewind_complete",
+            loaded_messages=loaded_messages,
+            current_state=target_state,
+            dynamic_vars=_safe_serialize(target_dynamic_vars),
+        )
+
+        logger.info(
+            "Rewind complete: index=%d, state=%s, transcript_len=%d",
+            index,
+            target_state,
+            len(truncated_transcript),
+        )
+
+    except Exception as e:
+        logger.exception("Failed to rewind")
+        emit_error(f"Rewind failed: {e}", code="REWIND_FAILED")
+
+
 async def handle_shutdown(_data: dict):
     emit("shutdown_ack")
     # Give the event time to flush
@@ -1208,7 +1405,24 @@ def _check_state_change():
     current = state.agent.state_manager.current_state
     if current != state.last_state:
         state.last_state = current
+        # Record mid-turn state change for rewind support
+        state.state_timeline.append((len(state.transcript_snapshot), current))
         emit("state_changed", state=current)
+
+
+def _record_turn_end():
+    """Record state and dynamic vars at the end of a complete turn.
+
+    Called after _init_agent greeting, session resume, and each handle_send_message.
+    Provides reliable turn-boundary snapshots for rewind.
+    """
+    if not state.agent:
+        return
+    transcript_len = len(_get_full_transcript())
+    current = state.agent.state_manager.current_state
+    # Only append if the position is new (avoid duplicates from _check_state_change)
+    if not state.state_timeline or state.state_timeline[-1] != (transcript_len, current):
+        state.state_timeline.append((transcript_len, current))
 
 
 def _reconcile_chat_ctx(last_segment: str):
@@ -1263,6 +1477,7 @@ HANDLERS = {
     "get_context": handle_get_context,
     "get_prompt": handle_get_prompt,
     "end_call": handle_end_call,
+    "rewind": handle_rewind,
     "shutdown": handle_shutdown,
 }
 

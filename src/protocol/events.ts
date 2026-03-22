@@ -6,6 +6,7 @@ import type {
   ErrorEvent,
   PromptEvent,
   ReadyEvent,
+  RewindCompleteEvent,
   ShutdownAckEvent,
   StateChangedEvent,
   StreamChunkEvent,
@@ -75,6 +76,10 @@ export function isTranscript(e: BackendEvent): e is TranscriptEvent {
 
 export function isError(e: BackendEvent): e is ErrorEvent {
   return e.event === "error";
+}
+
+export function isRewindComplete(e: BackendEvent): e is RewindCompleteEvent {
+  return e.event === "rewind_complete";
 }
 
 export function isShutdownAck(e: BackendEvent): e is ShutdownAckEvent {

@@ -5,6 +5,7 @@ import type {
   ConfigLoadedEvent,
   ContextEvent,
   PromptEvent,
+  RewindCompleteEvent,
   ToolCallInfo,
 } from "../protocol/types.js";
 import {
@@ -13,6 +14,7 @@ import {
   isContext,
   isError,
   isPrompt,
+  isRewindComplete,
   isStateChanged,
   isStreamChunk,
   isStreamEnd,
@@ -51,6 +53,8 @@ export function useChat() {
 
   // Accumulate streaming text in a ref for the commit
   const streamBuf = useRef("");
+  // Track current state in a ref so handleEvent (stable callback) can read it
+  const currentStateRef = useRef("");
 
   const addUserMessage = useCallback((text: string) => {
     const msg: ChatMessage = {
@@ -68,6 +72,7 @@ export function useChat() {
       setCallId(cle.call_id);
       setConfigSource(cle.config_source);
       setCurrentState(cle.starting_state);
+      currentStateRef.current = cle.starting_state;
 
       // Display loaded messages from a session/chat export
       if (cle.loaded_messages && cle.loaded_messages.length > 0) {
@@ -123,6 +128,7 @@ export function useChat() {
       setMessages((prev) => [...prev, msg]);
     } else if (isStateChanged(event)) {
       setCurrentState(event.state);
+      currentStateRef.current = event.state;
     } else if (isContext(event)) {
       setContextData((event as ContextEvent).messages);
     } else if (isPrompt(event)) {
@@ -135,6 +141,23 @@ export function useChat() {
     } else if (isCallEnded(event)) {
       setCallEnded(true);
       setFinalTranscript(event.transcript);
+    } else if (isRewindComplete(event)) {
+      const rce = event as RewindCompleteEvent;
+      const loaded: ChatMessage[] = [];
+      for (const m of rce.loaded_messages) {
+        if (m.content || m.tool_calls) {
+          loaded.push({
+            id: nextId(),
+            role: m.role,
+            content: m.content || "",
+            timestamp: Date.now(),
+            toolCalls: m.tool_calls,
+          });
+        }
+      }
+      setMessages(loaded);
+      setCurrentState(rce.current_state);
+      currentStateRef.current = rce.current_state;
     } else if (isError(event)) {
       setLastError(event.message);
     }

@@ -1,5 +1,7 @@
-import React from "react";
-import { Box, Static, Text } from "ink";
+import React, { useEffect, useRef, useState } from "react";
+import { Box, Text, useInput, useStdout } from "ink";
+import { ScrollView } from "ink-scroll-view";
+import type { ScrollViewRef } from "ink-scroll-view";
 import type { ChatMessage } from "../protocol/types.js";
 import { theme } from "../theme.js";
 import { MessageBubble } from "./MessageBubble.js";
@@ -24,6 +26,7 @@ interface Props {
   // Overlay state
   showContext: boolean;
   promptData: { prompt: string; state: string; dynamicVars: Record<string, unknown> } | null;
+  rewindMode?: boolean;
 }
 
 export function ChatView({
@@ -41,51 +44,88 @@ export function ChatView({
   onBatchSend,
   showContext,
   promptData,
+  rewindMode,
 }: Props) {
-  return (
-    <Box flexDirection="column" flexGrow={1}>
-      <StatusBar
-        currentState={currentState}
-        callId={callId}
-        configSource={configSource}
-        isStreaming={isStreaming}
-      />
+  const scrollRef = useRef<ScrollViewRef>(null);
+  const { stdout } = useStdout();
+  const [termHeight, setTermHeight] = useState(stdout?.rows ?? 24);
 
-      {/* Permanent scrollback — always rendered */}
-      <Static items={messages}>
-        {(msg) => (
-          <Box key={msg.id} flexDirection="column">
-            <MessageBubble message={msg} />
-            {msg.toolCalls && msg.toolCalls.length > 0 && (
-              <ToolCallDisplay toolCalls={msg.toolCalls} />
-            )}
-          </Box>
-        )}
-      </Static>
+  // Auto-scroll to bottom on new messages or streaming updates
+  useEffect(() => {
+    scrollRef.current?.scrollToBottom();
+  }, [messages.length, streamingText]);
+
+  // Track terminal height for fixed layout + handle resize
+  useEffect(() => {
+    const onResize = () => {
+      setTermHeight(stdout?.rows ?? 24);
+      scrollRef.current?.remeasure();
+    };
+    stdout?.on("resize", onResize);
+    return () => {
+      stdout?.off("resize", onResize);
+    };
+  }, [stdout]);
+
+  // Scroll keyboard handling (Up/Down arrows)
+  useInput(
+    (_input, key) => {
+      if (key.upArrow) scrollRef.current?.scrollBy(-1);
+      if (key.downArrow) scrollRef.current?.scrollBy(1);
+    },
+    { isActive: true },
+  );
+
+  return (
+    <Box flexDirection="column" height={termHeight}>
+      {/* StatusBar — pinned at top */}
+      <Box flexShrink={0}>
+        <StatusBar
+          currentState={currentState}
+          callId={callId}
+          configSource={configSource}
+          isStreaming={isStreaming}
+          rewindMode={rewindMode}
+        />
+      </Box>
+
+      {/* Scrollable message list — takes all remaining space */}
+      <Box flexGrow={1} overflow="hidden" flexDirection="column">
+        <ScrollView ref={scrollRef}>
+          {messages.map((msg) => (
+            <Box key={msg.id} flexDirection="column">
+              <MessageBubble message={msg} />
+              {msg.toolCalls && msg.toolCalls.length > 0 && (
+                <ToolCallDisplay toolCalls={msg.toolCalls} />
+              )}
+            </Box>
+          ))}
+
+          {/* Live streaming text inside scroll area */}
+          {isStreaming && !showContext && (
+            <Box marginBottom={0}>
+              <Text>
+                <Text color={theme.primary} bold>
+                  Assistant:
+                </Text>{" "}
+                <Text>{streamingText}</Text>
+                <Text color={theme.primary}>|</Text>
+              </Text>
+            </Box>
+          )}
+        </ScrollView>
+      </Box>
 
       {/* Context overlay — always mounted, toggled via display */}
-      <Box display={showContext ? "flex" : "none"} flexDirection="column">
+      <Box display={showContext ? "flex" : "none"} flexDirection="column" flexShrink={0}>
         <ContextViewer
           dynamicVars={promptData?.dynamicVars ?? null}
           currentState={promptData?.state ?? currentState ?? null}
         />
       </Box>
 
-      {/* Live streaming region — hidden when overlay active */}
-      {isStreaming && (
-        <Box display={showContext ? "none" : "flex"} marginBottom={0}>
-          <Text>
-<Text color={theme.primary} bold>
-            Assistant:
-            </Text>{" "}
-            <Text>{streamingText}</Text>
-            <Text color={theme.primary}>|</Text>
-          </Text>
-        </Box>
-      )}
-
-      {/* Input — always visible */}
-      <Box marginTop={0}>
+      {/* Input — pinned at bottom */}
+      <Box marginTop={0} flexShrink={0}>
         <InputBar
           onSubmit={onSendMessage}
           disabled={inputDisabled}
@@ -98,10 +138,10 @@ export function ChatView({
         />
       </Box>
 
-      {/* Keyboard hints */}
-      <Box>
+      {/* Keyboard hints — pinned at bottom */}
+      <Box flexShrink={0}>
         <Text color={theme.muted} dimColor>
-          Ctrl+E export  Ctrl+L logs  Ctrl+S save  Ctrl+X context  Ctrl+P prompt  Ctrl+B batch  Ctrl+C exit
+          Ctrl+E export  Ctrl+L logs  Ctrl+S save  Ctrl+R rewind  Ctrl+X context  Ctrl+P prompt  Ctrl+B batch  Ctrl+C exit
         </Text>
       </Box>
     </Box>
