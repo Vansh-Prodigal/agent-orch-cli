@@ -8,8 +8,10 @@ import { useKeyboard } from "./hooks/useKeyboard.js";
 import { SetupScreen } from "./components/SetupScreen.js";
 import { ChatView } from "./components/ChatView.js";
 import { LogViewer } from "./components/LogViewer.js";
+import { RewindOverlay } from "./components/RewindOverlay.js";
+import type { RewindItem } from "./components/RewindOverlay.js";
 import * as cmds from "./protocol/commands.js";
-import type { BackendEvent, PromptEvent, ContextEvent } from "./protocol/types.js";
+import type { BackendEvent, PromptEvent, ContextEvent, ChatMessage, ToolCallInfo } from "./protocol/types.js";
 import { isReady } from "./protocol/events.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -72,6 +74,11 @@ export function App({
   const [batchMode, setBatchMode] = useState(false);
   const [batchLines, setBatchLines] = useState<string[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  // Rewind state
+  const [showRewind, setShowRewind] = useState(false);
+  const [rewindItems, setRewindItems] = useState<RewindItem[]>([]);
+  const pendingRewindContext = useRef(false);
 
   const configRef = useRef<Record<string, unknown>>({});
 
@@ -136,6 +143,96 @@ export function App({
           setStatusMessage(`Prompt export failed: ${e}`);
         }
         setTimeout(() => setStatusMessage(null), 3000);
+        return; // Don't pass to chat.handleEvent
+      }
+
+      // --- Intercept context events for rewind overlay (Ctrl+R) ---
+      if (event.event === "context" && pendingRewindContext.current) {
+        pendingRewindContext.current = false;
+        const ce = event as ContextEvent;
+
+        // Convert OpenAI-format transcript into display items with paired tool calls.
+        // Only user/assistant messages become selectable items.
+        const items: RewindItem[] = [];
+        let displayIdx = 0;
+        let idCounter = 0;
+
+        // First pass: build ChatMessage entries for user/assistant, skip tool role
+        const entries: Array<{
+          transcriptIndex: number;
+          msg: ChatMessage;
+        }> = [];
+
+        for (let i = 0; i < ce.messages.length; i++) {
+          const raw = ce.messages[i] as Record<string, unknown>;
+          const role = (raw.role as string) || "";
+
+          if (role === "user") {
+            const content = (raw.content as string) || "";
+            if (!content) continue; // skip empty user messages (greeting trigger)
+            entries.push({
+              transcriptIndex: i,
+              msg: {
+                id: `rw_${idCounter++}`,
+                role: "user",
+                content,
+                timestamp: Date.now(),
+              },
+            });
+          } else if (role === "assistant" || role === "agent") {
+            const content = (raw.content as string) || "";
+            const rawTcs = raw.tool_calls as Array<Record<string, unknown>> | undefined;
+            let toolCalls: ToolCallInfo[] | undefined;
+            if (rawTcs && rawTcs.length > 0) {
+              toolCalls = rawTcs.map((tc) => {
+                const func = (tc.function as Record<string, unknown>) || {};
+                return {
+                  tool_call_id: (tc.id as string) || "",
+                  name: (func.name as string) || "",
+                  arguments: (func.arguments as string) || "",
+                  result: "",
+                };
+              });
+            }
+            entries.push({
+              transcriptIndex: i,
+              msg: {
+                id: `rw_${idCounter++}`,
+                role: "assistant",
+                content,
+                timestamp: Date.now(),
+                toolCalls,
+              },
+            });
+          } else if (role === "tool") {
+            // Pair tool result back into the preceding assistant entry
+            const tcId = (raw.tool_call_id as string) || "";
+            const result = (raw.content as string) || "";
+            for (let j = entries.length - 1; j >= 0; j--) {
+              const tcs = entries[j].msg.toolCalls;
+              if (tcs) {
+                const match = tcs.find((tc) => tc.tool_call_id === tcId);
+                if (match) {
+                  match.result = result;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // Build final display items with 1-based indices
+        for (const entry of entries) {
+          displayIdx++;
+          items.push({
+            displayIndex: displayIdx,
+            transcriptIndex: entry.transcriptIndex,
+            message: entry.msg,
+          });
+        }
+
+        setRewindItems(items);
+        setShowRewind(true);
         return; // Don't pass to chat.handleEvent
       }
 
@@ -301,6 +398,28 @@ export function App({
     setTimeout(() => setStatusMessage(null), 3000);
   }, [chat, session]);
 
+  // --- Rewind ---
+
+  const handleRewind = useCallback(() => {
+    if (chat.isStreaming) return;
+    pendingRewindContext.current = true;
+    agent.sendCommand(cmds.getContext());
+  }, [agent, chat.isStreaming]);
+
+  const handleRewindSelect = useCallback(
+    (index: number) => {
+      setShowRewind(false);
+      setRewindItems([]);
+      agent.sendCommand(cmds.rewind(index));
+    },
+    [agent],
+  );
+
+  const handleRewindCancel = useCallback(() => {
+    setShowRewind(false);
+    setRewindItems([]);
+  }, []);
+
   // --- Context / Prompt viewers ---
 
   const handleShowContext = useCallback(() => {
@@ -333,13 +452,23 @@ export function App({
     onSaveSession: handleSaveSession,
     onEndCall: handleEndCall,
     onEscape: () => {
-      if (showLogs) setShowLogs(false);
-      if (showContext) { setShowContext(false); chat.clearContext(); }
-      if (batchMode) { setBatchMode(false); setBatchLines([]); }
+      if (showRewind) {
+        setShowRewind(false);
+        setRewindItems([]);
+      } else if (showLogs) {
+        setShowLogs(false);
+      } else if (showContext) {
+        setShowContext(false);
+        chat.clearContext();
+      } else if (batchMode) {
+        setBatchMode(false);
+        setBatchLines([]);
+      }
     },
     onShowContext: handleShowContext,
     onShowPrompt: handleExportPrompt,
     onToggleBatch: handleToggleBatch,
+    onRewind: handleRewind,
     enabled: phase !== "waiting",
   });
 
@@ -355,6 +484,19 @@ export function App({
             Escape close  |  Ctrl+L logs  Ctrl+C exit
           </Text>
         </Box>
+      </Box>
+    );
+  }
+
+  // Rewind overlay — full-screen like LogViewer
+  if (showRewind) {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <RewindOverlay
+          items={rewindItems}
+          onSelect={handleRewindSelect}
+          onCancel={handleRewindCancel}
+        />
       </Box>
     );
   }

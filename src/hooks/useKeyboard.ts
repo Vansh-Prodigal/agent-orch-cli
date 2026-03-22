@@ -9,6 +9,7 @@ export interface KeyboardActions {
   onShowContext: () => void;
   onShowPrompt: () => void;
   onToggleBatch: () => void;
+  onRewind: () => void;
   enabled: boolean;
 }
 
@@ -21,6 +22,7 @@ export interface KeyboardActions {
  * Ctrl+X  -> show chat context overlay
  * Ctrl+P  -> export prompt to markdown file
  * Ctrl+B  -> toggle batch input mode
+ * Ctrl+R  -> enter rewind mode
  * Escape  -> close overlay / cancel
  */
 export function useKeyboard({
@@ -32,6 +34,7 @@ export function useKeyboard({
   onShowContext,
   onShowPrompt,
   onToggleBatch,
+  onRewind,
   enabled,
 }: KeyboardActions) {
   useInput(
@@ -50,6 +53,8 @@ export function useKeyboard({
         onShowPrompt();
       } else if (key.ctrl && input === "b") {
         onToggleBatch();
+      } else if (key.ctrl && input === "r") {
+        onRewind();
       } else if (key.escape) {
         onEscape();
       }
