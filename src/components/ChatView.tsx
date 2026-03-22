@@ -27,6 +27,9 @@ interface Props {
   showContext: boolean;
   promptData: { prompt: string; state: string; dynamicVars: Record<string, unknown> } | null;
   rewindMode?: boolean;
+  autopilotActive?: boolean;
+  autopilotProgress?: string | null;
+  autopilotValue?: string | null;
 }
 
 /** Build a keyboard hint segment. */
@@ -50,6 +53,9 @@ export function ChatView({
   showContext,
   promptData,
   rewindMode,
+  autopilotActive,
+  autopilotProgress,
+  autopilotValue,
 }: Props) {
   const scrollRef = useRef<ScrollViewRef>(null);
   const { stdout } = useStdout();
@@ -92,6 +98,7 @@ export function ChatView({
           configSource={configSource}
           isStreaming={isStreaming}
           rewindMode={rewindMode}
+          autopilotProgress={autopilotProgress}
         />
       </Box>
 
@@ -134,6 +141,18 @@ export function ChatView({
         />
       </Box>
 
+      {/* Autopilot indicator — above input */}
+      {autopilotActive && autopilotProgress && (
+        <Box flexShrink={0}>
+          <Text color={theme.info} bold>
+            {glyph.gear} AUTOPILOT [{autopilotProgress}]
+          </Text>
+          <Text color={theme.muted} dimColor>
+            {` ${glyph.dot} `}^A disable
+          </Text>
+        </Box>
+      )}
+
       {/* Input — pinned at bottom */}
       <Box marginTop={0} flexShrink={0}>
         <InputBar
@@ -145,6 +164,7 @@ export function ChatView({
           batchLines={batchLines}
           onBatchAdd={onBatchAdd}
           onBatchSend={onBatchSend}
+          autopilotValue={autopilotValue}
         />
       </Box>
 
@@ -160,6 +180,7 @@ export function ChatView({
             hint("^X", "context"),
             hint("^P", "prompt"),
             hint("^B", "batch"),
+            ...(autopilotActive ? [hint("^A", "autopilot")] : []),
             hint("^C", "exit"),
           ].join(sep)}
         </Text>

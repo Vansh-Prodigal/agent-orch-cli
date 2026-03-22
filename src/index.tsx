@@ -15,6 +15,7 @@ const cli = meow(
     --config, -c         Path to local config JSON file
     --override, -o       Path to config override JSON (merged on top)
     --load-session, -l   Path to a saved session or chat export to resume
+    --autopilot, -a      Path to chat/session file for autopilot replay
     --python, -p         Path to Python interpreter
     --project-root       Path to project root (default: auto-detect)
     --verbose, -v        Show verbose backend debug logs
@@ -50,6 +51,10 @@ const cli = meow(
         type: "string",
         shortFlag: "l",
       },
+      autopilot: {
+        type: "string",
+        shortFlag: "a",
+      },
       python: {
         type: "string",
         shortFlag: "p",
@@ -73,6 +78,7 @@ render(
     configPath={cli.flags.config}
     configOverridePath={cli.flags.override}
     loadSessionPath={cli.flags.loadSession}
+    autopilotPath={cli.flags.autopilot}
     pythonPath={cli.flags.python}
     projectRoot={cli.flags.projectRoot}
     verbose={cli.flags.verbose}

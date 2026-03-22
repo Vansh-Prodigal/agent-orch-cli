@@ -8,6 +8,7 @@ interface Props {
   configSource: string;
   isStreaming: boolean;
   rewindMode?: boolean;
+  autopilotProgress?: string | null;
 }
 
 export function StatusBar({
@@ -16,11 +17,12 @@ export function StatusBar({
   configSource,
   isStreaming,
   rewindMode,
+  autopilotProgress,
 }: Props) {
   return (
     <Box
       borderStyle="round"
-      borderColor={rewindMode ? theme.warning : isStreaming ? theme.accent : theme.border}
+      borderColor={autopilotProgress ? theme.info : rewindMode ? theme.warning : isStreaming ? theme.accent : theme.border}
       paddingX={1}
       width="100%"
     >
@@ -53,6 +55,14 @@ export function StatusBar({
             <Text color={theme.border}> {glyph.sep} </Text>
             <Text color={theme.warning} bold>
               {glyph.arrow} REWIND
+            </Text>
+          </>
+        )}
+        {autopilotProgress && (
+          <>
+            <Text color={theme.border}> {glyph.sep} </Text>
+            <Text color={theme.info} bold>
+              {glyph.gear} AUTOPILOT [{autopilotProgress}]
             </Text>
           </>
         )}

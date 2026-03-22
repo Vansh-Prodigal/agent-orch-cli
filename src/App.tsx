@@ -5,13 +5,14 @@ import { useChat } from "./hooks/useChat.js";
 import { useLogs } from "./hooks/useLogs.js";
 import { useSession } from "./hooks/useSession.js";
 import { useKeyboard } from "./hooks/useKeyboard.js";
+import { useAutopilot } from "./hooks/useAutopilot.js";
 import { SetupScreen } from "./components/SetupScreen.js";
 import { ChatView } from "./components/ChatView.js";
 import { LogViewer } from "./components/LogViewer.js";
 import { RewindOverlay } from "./components/RewindOverlay.js";
 import type { RewindItem } from "./components/RewindOverlay.js";
 import * as cmds from "./protocol/commands.js";
-import type { BackendEvent, PromptEvent, ContextEvent, ChatMessage, ToolCallInfo } from "./protocol/types.js";
+import type { BackendEvent, PromptEvent, ContextEvent, ConfigLoadedEvent, LoadedMessage, ChatMessage, ToolCallInfo } from "./protocol/types.js";
 import { isReady } from "./protocol/events.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -52,6 +53,7 @@ export interface AppProps {
   configPath?: string;
   configOverridePath?: string;
   loadSessionPath?: string;
+  autopilotPath?: string;
   pythonPath?: string;
   projectRoot?: string;
   verbose?: boolean;
@@ -63,6 +65,7 @@ export function App({
   configPath,
   configOverridePath,
   loadSessionPath,
+  autopilotPath,
   pythonPath,
   projectRoot,
   verbose = false,
@@ -87,6 +90,13 @@ export function App({
   const pendingPromptExport = useRef(false);
   const pendingChatExport = useRef(false);
 
+  // Autopilot state
+  const [autopilotValue, setAutopilotValue] = useState<string | null>(null);
+  const autopilot = useAutopilot({ onPopulate: setAutopilotValue });
+  // Ref to access latest autopilot state inside onEvent without stale closures
+  const autopilotRef = useRef(autopilot);
+  autopilotRef.current = autopilot;
+
   const chat = useChat();
   const logs = useLogs();
   const session = useSession();
@@ -94,7 +104,47 @@ export function App({
   const onEvent = useCallback(
     (event: BackendEvent) => {
       if (isReady(event)) {
-        if (loadSessionPath) {
+        if (autopilotPath) {
+          // Autopilot: read file client-side to extract user messages,
+          // then load ONLY config (no conversation resume on backend).
+          try {
+            const raw = readFileSync(autopilotPath, "utf-8");
+            const data = JSON.parse(raw);
+
+            // Extract user messages from either session or chat export format
+            const msgs: LoadedMessage[] = (data.messages || [])
+              .filter((m: Record<string, unknown>) => m.role === "user" && m.content)
+              .map((m: Record<string, unknown>) => ({
+                role: "user" as const,
+                content: String(m.content),
+              }));
+
+            autopilotRef.current.initialize(msgs);
+
+            // Determine config source: explicit flags take priority, then embedded session config
+            if (configPath) {
+              agent.sendCommand(cmds.loadConfigFile(configPath));
+            } else if (toNumber) {
+              agent.sendCommand(cmds.loadConfig(toNumber, { fromNumber }));
+            } else if (data.config && typeof data.config === "object") {
+              // Session file with embedded config — write to temp file and load
+              const tmpDir = ensureExportsDir(".tmp");
+              const tmpPath = join(tmpDir, "autopilot_config.json");
+              writeFileSync(tmpPath, JSON.stringify(data.config), "utf-8");
+              agent.sendCommand(cmds.loadConfigFile(tmpPath));
+            } else {
+              setStatusMessage("Autopilot requires --config or --to-number (or a session file with embedded config)");
+              setPhase("setup");
+              return;
+            }
+          } catch (e) {
+            setStatusMessage(`Failed to read autopilot file: ${e}`);
+            setPhase("setup");
+            return;
+          }
+
+          setPhase("waiting");
+        } else if (loadSessionPath) {
           // When resuming a session we should NOT enter the setup screen.
           // SetupScreen auto-submits when `--to-number`/`--config` are provided,
           // which would send a second load command (load_config/load_config_file)
@@ -274,6 +324,11 @@ export function App({
 
       chat.handleEvent(event);
 
+      // Autopilot: advance after assistant finishes responding
+      if (event.event === "stream_end" && autopilotRef.current.isActive) {
+        autopilotRef.current.notifyStreamEnd();
+      }
+
       // Store config when loaded
       if (event.event === "config_loaded") {
         const cle = event as { config?: Record<string, unknown> };
@@ -286,7 +341,7 @@ export function App({
         setPhase("ended");
       }
     },
-    [loadSessionPath],
+    [loadSessionPath, autopilotPath],
   );
 
   const agent = useAgent({
@@ -343,8 +398,12 @@ export function App({
     (text: string) => {
       chat.addUserMessage(text);
       agent.sendCommand(cmds.sendMessage(text));
+      if (autopilot.isActive) {
+        autopilot.markWaitingForResponse();
+        setAutopilotValue(null);
+      }
     },
-    [agent, chat],
+    [agent, chat, autopilot],
   );
 
   // --- Batch mode ---
@@ -439,6 +498,14 @@ export function App({
     agent.sendCommand(cmds.getPrompt());
   }, [agent]);
 
+  const handleToggleAutopilot = useCallback(() => {
+    if (autopilot.isActive) {
+      autopilot.disable();
+      setStatusMessage("Autopilot disabled");
+      setTimeout(() => setStatusMessage(null), 3000);
+    }
+  }, [autopilot]);
+
   useKeyboard({
     onExport: handleExport,
     onToggleLogs: () => {
@@ -469,6 +536,7 @@ export function App({
     onShowPrompt: handleExportPrompt,
     onToggleBatch: handleToggleBatch,
     onRewind: handleRewind,
+    onToggleAutopilot: handleToggleAutopilot,
     enabled: phase !== "waiting",
   });
 
@@ -586,6 +654,9 @@ export function App({
         onBatchSend={handleBatchSend}
         showContext={showContext}
         promptData={chat.promptData}
+        autopilotActive={autopilot.isActive}
+        autopilotProgress={autopilot.isActive ? `${autopilot.currentIndex + 1}/${autopilot.totalCount}` : null}
+        autopilotValue={autopilotValue}
       />
     </Box>
   );
