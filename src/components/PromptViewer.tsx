@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { theme } from "../theme.js";
+import { theme, glyph } from "../theme.js";
 
 interface Props {
   prompt: string | null;
@@ -12,23 +12,26 @@ export function PromptViewer({ prompt, state, dynamicVars }: Props) {
   return (
     <Box
       flexDirection="column"
-      borderStyle="double"
+      borderStyle="single"
       borderColor={theme.success}
       paddingX={1}
     >
       <Text color={theme.success} bold>
-        Current Prompt [state: {state ?? "—"}] — press Escape to close
+        {glyph.diamondD} Prompt
+        <Text color={theme.muted}>
+          {" "}[{state ?? "—"}] {glyph.dot} Escape to close
+        </Text>
       </Text>
       <Text />
 
       {dynamicVars && Object.keys(dynamicVars).length > 0 && (
         <Box flexDirection="column" marginBottom={1}>
           <Text color={theme.warning} bold>
-            Dynamic Variables:
+            {glyph.arrow} Dynamic Variables
           </Text>
           {Object.entries(dynamicVars).map(([key, value]) => (
             <Text key={key} color={theme.muted}>
-              {key}: {truncate(formatValue(value), 200)}
+              {"  "}{glyph.bulletO} {key}: {truncate(formatValue(value), 200)}
             </Text>
           ))}
           <Text />
@@ -36,12 +39,14 @@ export function PromptViewer({ prompt, state, dynamicVars }: Props) {
       )}
 
       <Text color={theme.emphasis} bold>
-        Assembled Prompt:
+        {glyph.arrow} Assembled Prompt
       </Text>
       {prompt ? (
         <Text wrap="wrap">{prompt}</Text>
       ) : (
-        <Text color={theme.muted} dimColor>Loading...</Text>
+        <Text color={theme.muted}>
+          {glyph.gear} Loading{glyph.ellipsis}
+        </Text>
       )}
     </Box>
   );
@@ -59,5 +64,5 @@ function formatValue(v: unknown): string {
 
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
-  return s.slice(0, max) + "...";
+  return s.slice(0, max) + glyph.ellipsis;
 }

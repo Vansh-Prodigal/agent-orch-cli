@@ -17,7 +17,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deepMerge } from "./utils/deepMerge.js";
-import { theme } from "./theme.js";
+import { theme, glyph } from "./theme.js";
 
 type Phase = "waiting" | "setup" | "chatting" | "ended";
 
@@ -481,7 +481,7 @@ export function App({
         <LogViewer lines={logs.lines} visible />
         <Box>
           <Text color={theme.muted} dimColor>
-            Escape close  |  Ctrl+L logs  Ctrl+C exit
+            {glyph.bulletO} Esc close {glyph.dot} ^L logs {glyph.dot} ^C exit
           </Text>
         </Box>
       </Box>
@@ -504,10 +504,12 @@ export function App({
   if (phase === "waiting") {
     return (
       <Box flexDirection="column" padding={1}>
-<Text color={theme.primary} bold>
-        ProAgent CLI
+        <Text color={theme.primary} bold>
+          {glyph.diamondD} ProAgent CLI
         </Text>
-        <Text color={theme.muted}>Starting backend...</Text>
+        <Text color={theme.muted}>
+          {glyph.gear} Starting backend{glyph.ellipsis}
+        </Text>
       </Box>
     );
   }
@@ -529,17 +531,23 @@ export function App({
     return (
       <Box flexDirection="column" padding={1}>
         <Text color={theme.primary} bold>
-          ProAgent CLI — Call Ended
+          {glyph.diamondD} ProAgent CLI {glyph.dot} Call Ended
         </Text>
-        {statusMessage && <Text color={theme.warning}>{statusMessage}</Text>}
-        <Text>
-          Messages exchanged: {chat.messages.length}
+        {statusMessage && (
+          <Text color={theme.warning}>
+            {glyph.arrow} {statusMessage}
+          </Text>
+        )}
+        <Text color={theme.emphasis}>
+          {glyph.bullet} Messages exchanged: {chat.messages.length}
         </Text>
         <Text color={theme.muted}>
-          Press Ctrl+E to export transcript, or Ctrl+C to exit.
+          {glyph.bulletO} ^E export transcript {glyph.dot} ^C exit
         </Text>
         {chat.lastError && (
-          <Text color={theme.error}>Last error: {chat.lastError}</Text>
+          <Text color={theme.error}>
+            {glyph.cross} {chat.lastError}
+          </Text>
         )}
       </Box>
     );
@@ -550,14 +558,16 @@ export function App({
       {chat.lastError && (
         <Box paddingX={1}>
           <Text color={theme.error} bold>
-            Error: {chat.lastError}
+            {glyph.cross} {chat.lastError}
           </Text>
         </Box>
       )}
 
       {statusMessage && (
         <Box paddingX={1}>
-          <Text color={theme.success}>{statusMessage}</Text>
+          <Text color={theme.success}>
+            {glyph.check} {statusMessage}
+          </Text>
         </Box>
       )}
 

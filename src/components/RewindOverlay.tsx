@@ -4,7 +4,7 @@ import TextInput from "ink-text-input";
 import { ScrollView } from "ink-scroll-view";
 import type { ScrollViewRef } from "ink-scroll-view";
 import type { ChatMessage, ToolCallInfo } from "../protocol/types.js";
-import { theme } from "../theme.js";
+import { theme, glyph } from "../theme.js";
 import { MessageBubble } from "./MessageBubble.js";
 import { ToolCallDisplay } from "./ToolCallDisplay.js";
 
@@ -59,9 +59,9 @@ export function RewindOverlay({ items, onSelect, onCancel }: Props) {
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      <Box borderStyle="single" borderColor={theme.warning} paddingX={1}>
+      <Box borderStyle="round" borderColor={theme.warning} paddingX={1}>
         <Text color={theme.warning} bold>
-          REWIND MODE
+          {glyph.arrow} REWIND
         </Text>
         <Text color={theme.muted}>
           {"  "}Select a message to rewind to (1–{maxIndex})
@@ -94,14 +94,14 @@ export function RewindOverlay({ items, onSelect, onCancel }: Props) {
       {/* Error message */}
       {error && (
         <Box>
-          <Text color={theme.error}>{error}</Text>
+          <Text color={theme.error}>{glyph.cross} {error}</Text>
         </Box>
       )}
 
       {/* Input */}
       <Box>
         <Text color={theme.warning} bold>
-          R{">"}{" "}
+          R{glyph.prompt}{" "}
         </Text>
         <TextInput
           value={value}
@@ -117,7 +117,7 @@ export function RewindOverlay({ items, onSelect, onCancel }: Props) {
 
       <Box>
         <Text color={theme.muted} dimColor>
-          Escape cancel  |  ↑↓ scroll  |  Enter to rewind
+          {glyph.bulletO} Esc cancel {glyph.dot} {"\u2191\u2193"} scroll {glyph.dot} Enter rewind
         </Text>
       </Box>
     </Box>
