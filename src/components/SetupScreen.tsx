@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Box, Text } from "ink";
 import TextInput from "ink-text-input";
-import { theme } from "../theme.js";
+import { theme, glyph } from "../theme.js";
 
 type ConfigMode = "select" | "remote" | "local";
 
@@ -12,6 +12,23 @@ interface Props {
   initialConfigPath?: string;
   logs?: string[];
   verbose?: boolean;
+}
+
+/** Spaced-out banner title. */
+function Banner() {
+  return (
+    <Box
+      borderStyle="single"
+      borderColor={theme.primary}
+      paddingX={3}
+      justifyContent="center"
+      marginBottom={1}
+    >
+      <Text color={theme.primary} bold>
+        {glyph.diamondD}{"  "}P R O A G E N T{"  "}C L I
+      </Text>
+    </Box>
+  );
 }
 
 export function SetupScreen({
@@ -45,10 +62,10 @@ export function SetupScreen({
     const displayLines = verbose ? logs.slice(-12) : [];
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color={theme.primary} bold>
-          ProAgent CLI
+        <Banner />
+        <Text color={theme.muted}>
+          {glyph.gear} Loading configuration{glyph.ellipsis}
         </Text>
-        <Text color={theme.muted}>Loading configuration...</Text>
         <Text color={theme.muted} dimColor>
           Press Ctrl+L to view backend logs.
         </Text>
@@ -56,7 +73,7 @@ export function SetupScreen({
           <>
             <Text />
             <Text color={theme.muted} dimColor>
-              Verbose mode enabled. Showing backend logs (tail).
+              Verbose mode {glyph.dot} showing backend logs (tail)
             </Text>
             {displayLines.length > 0 ? (
               displayLines.map((line, i) => (
@@ -66,7 +83,7 @@ export function SetupScreen({
               ))
             ) : (
               <Text color={theme.muted} dimColor>
-                No logs yet. (Press Ctrl+L to open full log viewer.)
+                No logs yet. Press Ctrl+L for full log viewer.
               </Text>
             )}
           </>
@@ -78,17 +95,16 @@ export function SetupScreen({
   if (mode === "select") {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color={theme.primary} bold>
-          ProAgent CLI
-        </Text>
+        <Banner />
+        <Text color={theme.emphasis}>How would you like to load the agent config?</Text>
         <Text />
-        <Text>How would you like to load the agent config?</Text>
-        <Text />
-        <Text color={theme.success}>
-          [1] Remote — fetch by phone number from dev config manager
+        <Text>
+          <Text color={theme.success} bold>[1]</Text>
+          <Text color={theme.success}> {glyph.arrow} Remote — fetch by phone number</Text>
         </Text>
-        <Text color={theme.warning}>
-          [2] Local — load from a JSON config file
+        <Text>
+          <Text color={theme.warning} bold>[2]</Text>
+          <Text color={theme.warning}> {glyph.arrow} Local  — load from JSON config file</Text>
         </Text>
         <Text />
         <SelectInput onSelect={(choice: string) => {
@@ -102,14 +118,13 @@ export function SetupScreen({
   if (mode === "remote") {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color={theme.primary} bold>
-          ProAgent CLI — Remote Config
+        <Banner />
+        <Text color={theme.emphasis}>
+          Enter the to_number (phone number to look up config for):
         </Text>
-        <Text />
-        <Text>Enter the to_number (phone number to look up config for):</Text>
         <Box>
           <Text color={theme.success} bold>
-            {">"}{" "}
+            {glyph.prompt}{" "}
           </Text>
           <TextInput
             value={toNumber}
@@ -127,14 +142,11 @@ export function SetupScreen({
   // mode === "local"
   return (
     <Box flexDirection="column" padding={1}>
-      <Text color={theme.primary} bold>
-        ProAgent CLI — Local Config
-      </Text>
-      <Text />
-      <Text>Enter path to config JSON file:</Text>
+      <Banner />
+      <Text color={theme.emphasis}>Enter path to config JSON file:</Text>
       <Box>
         <Text color={theme.warning} bold>
-          {">"}{" "}
+          {glyph.prompt}{" "}
         </Text>
         <TextInput
           value={filePath}
@@ -156,8 +168,8 @@ function SelectInput({ onSelect }: { onSelect: (choice: string) => void }) {
   const [value, setValue] = useState("");
   return (
     <Box>
-      <Text color={theme.emphasis} bold>
-        {">"}{" "}
+      <Text color={theme.primary} bold>
+        {glyph.prompt}{" "}
       </Text>
       <TextInput
         value={value}

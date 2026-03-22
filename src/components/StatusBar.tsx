@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { theme } from "../theme.js";
+import { theme, glyph } from "../theme.js";
 
 interface Props {
   currentState: string;
@@ -19,34 +19,40 @@ export function StatusBar({
 }: Props) {
   return (
     <Box
-      borderStyle="single"
-      borderColor={theme.muted}
+      borderStyle="round"
+      borderColor={rewindMode ? theme.warning : isStreaming ? theme.accent : theme.border}
       paddingX={1}
       width="100%"
     >
       <Text>
-        <Text color={theme.warning}>[state: {currentState || "—"}]</Text>
-        {"  "}
-        <Text color={theme.muted} dimColor>
-          [call_id: {callId || "—"}]
+        <Text color={theme.primary} bold>
+          {glyph.diamondD} PROAGENT
         </Text>
-        {"  "}
-        <Text color={theme.muted} dimColor>
-          [config: {configSource || "—"}]
+        <Text color={theme.border}> {glyph.sep} </Text>
+        <Text color={theme.warning} bold>
+          {glyph.arrow} {currentState || "—"}
+        </Text>
+        <Text color={theme.border}> {glyph.sep} </Text>
+        <Text color={theme.muted}>
+          call {glyph.dot} {callId || "—"}
+        </Text>
+        <Text color={theme.border}> {glyph.sep} </Text>
+        <Text color={theme.muted}>
+          cfg {glyph.dot} {configSource || "—"}
         </Text>
         {isStreaming && (
           <>
-            {"  "}
-            <Text color={theme.primary} dimColor>
-              [streaming...]
+            <Text color={theme.border}> {glyph.sep} </Text>
+            <Text color={theme.accent} bold>
+              {glyph.gear} streaming
             </Text>
           </>
         )}
         {rewindMode && (
           <>
-            {"  "}
+            <Text color={theme.border}> {glyph.sep} </Text>
             <Text color={theme.warning} bold>
-              [REWIND]
+              {glyph.arrow} REWIND
             </Text>
           </>
         )}

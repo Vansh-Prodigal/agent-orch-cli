@@ -1,18 +1,12 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { ChatMessage } from "../protocol/types.js";
-import { theme } from "../theme.js";
+import { theme, glyph } from "../theme.js";
 
-const ROLE_COLORS: Record<string, string> = {
-  user: theme.success,
-  assistant: theme.primary,
-  system: theme.warning,
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  user: "You",
-  assistant: "Assistant",
-  system: "System",
+const ROLE_STYLES: Record<string, { color: string; icon: string; label: string }> = {
+  user:      { color: theme.success, icon: glyph.bullet,   label: "You" },
+  assistant: { color: theme.primary, icon: glyph.diamond,  label: "Assistant" },
+  system:    { color: theme.warning, icon: glyph.arrow,    label: "System" },
 };
 
 interface Props {
@@ -20,8 +14,11 @@ interface Props {
 }
 
 export function MessageBubble({ message }: Props) {
-  const color = ROLE_COLORS[message.role] || "white";
-  const label = ROLE_LABELS[message.role] || message.role;
+  const style = ROLE_STYLES[message.role] || {
+    color: theme.emphasis,
+    icon: glyph.dot,
+    label: message.role,
+  };
 
   // Skip rendering empty assistant messages (tool-call-only entries)
   if (!message.content && message.role === "assistant") {
@@ -30,12 +27,14 @@ export function MessageBubble({ message }: Props) {
 
   return (
     <Box flexDirection="column" marginBottom={1}>
-      <Text wrap="wrap">
-        <Text color={color} bold>
-          {label}:
-        </Text>{" "}
-        <Text>{message.content}</Text>
+      <Text>
+        <Text color={style.color} bold>
+          {style.icon} {style.label}
+        </Text>
       </Text>
+      <Box marginLeft={2}>
+        <Text wrap="wrap">{message.content}</Text>
+      </Box>
     </Box>
   );
 }

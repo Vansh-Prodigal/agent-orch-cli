@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Box, Text } from "ink";
 import TextInput from "ink-text-input";
-import { theme } from "../theme.js";
+import { theme, glyph } from "../theme.js";
 import { digitsToWords } from "../utils/digitsToWords.js";
 
 interface Props {
@@ -53,8 +53,8 @@ export function InputBar({
   if (disabled) {
     return (
       <Box>
-        <Text color={theme.muted} dimColor>
-          {placeholder}
+        <Text color={theme.muted}>
+          {glyph.prompt} {placeholder}
         </Text>
       </Box>
     );
@@ -64,19 +64,19 @@ export function InputBar({
     <Box flexDirection="column">
       {batchMode && batchLines.length > 0 && (
         <Box flexDirection="column" marginBottom={0}>
-          <Text color={theme.warning} dimColor>
-            Batch queue ({batchLines.length} messages, press Enter on empty line to send):
+          <Text color={theme.warning}>
+            {glyph.arrow} Batch queue ({batchLines.length}) {glyph.dot} Enter on empty line to send
           </Text>
           {batchLines.map((line, i) => (
             <Text key={i} color={theme.muted}>
-              {"  "}{i + 1}. {line}
+              {"  "}{glyph.bulletO} {i + 1}. {line}
             </Text>
           ))}
         </Box>
       )}
       <Box>
         <Text color={batchMode ? theme.warning : theme.success} bold>
-          {batchMode ? "B>" : ">"}{" "}
+          {batchMode ? `B${glyph.prompt}` : glyph.prompt}{" "}
         </Text>
         <TextInput
           value={value}

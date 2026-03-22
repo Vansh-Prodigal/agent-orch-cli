@@ -3,7 +3,7 @@ import { Box, Text, useInput, useStdout } from "ink";
 import { ScrollView } from "ink-scroll-view";
 import type { ScrollViewRef } from "ink-scroll-view";
 import type { ChatMessage } from "../protocol/types.js";
-import { theme } from "../theme.js";
+import { theme, glyph } from "../theme.js";
 import { MessageBubble } from "./MessageBubble.js";
 import { ToolCallDisplay } from "./ToolCallDisplay.js";
 import { ContextViewer } from "./ContextViewer.js";
@@ -29,6 +29,11 @@ interface Props {
   rewindMode?: boolean;
 }
 
+/** Build a keyboard hint segment. */
+function hint(key: string, label: string): string {
+  return `${key} ${label}`;
+}
+
 export function ChatView({
   messages,
   streamingText,
@@ -49,6 +54,7 @@ export function ChatView({
   const scrollRef = useRef<ScrollViewRef>(null);
   const { stdout } = useStdout();
   const [termHeight, setTermHeight] = useState(stdout?.rows ?? 24);
+  const sep = ` ${glyph.dot} `;
 
   // Auto-scroll to bottom on new messages or streaming updates
   useEffect(() => {
@@ -103,14 +109,18 @@ export function ChatView({
 
           {/* Live streaming text inside scroll area */}
           {isStreaming && !showContext && (
-            <Box marginBottom={0}>
+            <Box flexDirection="column" marginBottom={0}>
               <Text>
                 <Text color={theme.primary} bold>
-                  Assistant:
-                </Text>{" "}
-                <Text>{streamingText}</Text>
-                <Text color={theme.primary}>|</Text>
+                  {glyph.diamond} Assistant
+                </Text>
               </Text>
+              <Box marginLeft={2}>
+                <Text wrap="wrap">
+                  {streamingText}
+                  <Text color={theme.accent}>{glyph.cursor}</Text>
+                </Text>
+              </Box>
             </Box>
           )}
         </ScrollView>
@@ -141,7 +151,17 @@ export function ChatView({
       {/* Keyboard hints — pinned at bottom */}
       <Box flexShrink={0}>
         <Text color={theme.muted} dimColor>
-          Ctrl+E export  Ctrl+L logs  Ctrl+S save  Ctrl+R rewind  Ctrl+X context  Ctrl+P prompt  Ctrl+B batch  Ctrl+C exit
+          {glyph.bulletO}{" "}
+          {[
+            hint("^E", "export"),
+            hint("^L", "logs"),
+            hint("^S", "save"),
+            hint("^R", "rewind"),
+            hint("^X", "context"),
+            hint("^P", "prompt"),
+            hint("^B", "batch"),
+            hint("^C", "exit"),
+          ].join(sep)}
         </Text>
       </Box>
     </Box>

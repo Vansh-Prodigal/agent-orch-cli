@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { theme } from "../theme.js";
+import { theme, glyph } from "../theme.js";
 
 interface Props {
   dynamicVars: Record<string, unknown> | null;
@@ -13,24 +13,27 @@ export function ContextViewer({ dynamicVars, currentState }: Props) {
   return (
     <Box
       flexDirection="column"
-      borderStyle="double"
+      borderStyle="single"
       borderColor={theme.info}
       paddingX={1}
     >
       <Text color={theme.info} bold>
-        Dynamic Variables [state: {currentState || "—"}] — press Escape to close
+        {glyph.diamondD} Dynamic Variables
+        <Text color={theme.muted}>
+          {" "}[{currentState || "—"}] {glyph.dot} Escape to close
+        </Text>
       </Text>
       <Text />
       {entries.length === 0 ? (
-        <Text color={theme.muted} dimColor>
-          {dynamicVars ? "No dynamic variables set." : "Loading..."}
+        <Text color={theme.muted}>
+          {dynamicVars ? "No dynamic variables set." : `${glyph.gear} Loading${glyph.ellipsis}`}
         </Text>
       ) : (
         entries.map(([key, value]) => (
           <Box key={key} flexDirection="column" marginBottom={0}>
             <Text>
-              <Text color={theme.primary} bold>
-                {key}:
+              <Text color={theme.info} bold>
+                {glyph.arrow} {key}
               </Text>{" "}
               <Text wrap="wrap">{formatValue(value)}</Text>
             </Text>
