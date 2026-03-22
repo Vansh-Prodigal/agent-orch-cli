@@ -106,13 +106,19 @@ If `resume_from` is set to an integer, the backend slices the transcript to `[:r
 
 While chatting:
 
+- **Ctrl+R**: rewind conversation to a previous message
 - **Ctrl+E**: export full chat context (OpenAI-format JSON) to `cli/exports/chats/`
 - **Ctrl+S**: save a resumeable session JSON to `cli/exports/sessions/`
 - **Ctrl+X**: show context/prompt overlay
 - **Ctrl+P**: export assembled prompt markdown to `cli/exports/prompts/`
 - **Ctrl+L**: toggle log viewer
 - **Ctrl+B**: batch input mode
+- **Up/Down arrows**: scroll the message list
 - **Ctrl+C**: exit
+
+### Rewinding a conversation
+
+Press **Ctrl+R** to enter rewind mode. A full-screen overlay shows all user and assistant messages with numbered indices. Type a number and press Enter to rewind to that message — the conversation is truncated to that point (including the correct agent state and dynamic variables), and you can continue from there. Press Escape to cancel.
 
 Exports live under `cli/exports/` and are ignored by git (`cli/.gitignore`).
 
@@ -121,8 +127,8 @@ Exports live under `cli/exports/` and are ignored by git (`cli/.gitignore`).
 - **UI**: TypeScript Ink app (`cli/src/`)
 - **Backend**: Python process (`cli/backend.py`)
 - **Protocol**: JSON-lines over stdin/stdout
-  - UI sends commands like `load_config`, `load_config_file`, `load_session`, `send_message`
-  - Backend emits events like `config_loaded`, `stream_start`, `stream_chunk`, `stream_end`, `tool_calls`, `state_changed`
+  - UI sends commands like `load_config`, `load_config_file`, `load_session`, `send_message`, `rewind`
+  - Backend emits events like `config_loaded`, `stream_start`, `stream_chunk`, `stream_end`, `tool_calls`, `state_changed`, `rewind_complete`
 
 Key code:
 
