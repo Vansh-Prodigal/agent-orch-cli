@@ -47,7 +47,12 @@ from typing import Any, Dict, List, Optional, Tuple
 # Verbose mode (CLI-only)
 # ---------------------------------------------------------------------------
 
-_CLI_VERBOSE = os.environ.get("PROAGENT_CLI_VERBOSE", "").lower() in ("1", "true", "yes", "y")
+_CLI_VERBOSE = os.environ.get("PROAGENT_CLI_VERBOSE", "").lower() in (
+    "1",
+    "true",
+    "yes",
+    "y",
+)
 
 # ---------------------------------------------------------------------------
 # Redirect ALL output to stderr BEFORE importing anything from agent_orchestrator
@@ -120,8 +125,8 @@ from custom_plugins.custom_llm.utils import (  # noqa: E402
 from proagent.agent import DynamicVariablesWebhook, ProAgent  # noqa: E402
 from proagent.prompts import get_state_system_prompt  # noqa: E402
 from proagent.utils import (  # noqa: E402
-    get_config_from_db,
     check_if_state_transition_tool,
+    get_config_from_db,
     get_state_name_from_tool_name,
 )
 from schemas.events import (  # noqa: E402
@@ -130,8 +135,8 @@ from schemas.events import (  # noqa: E402
     ToolCallResultResponse,
 )
 from schemas.types import (  # noqa: E402
-    CallDirection,
     LLMTTFT,
+    CallDirection,
     LLMUsage,
     ProAgentLLMConfig,
 )
@@ -396,7 +401,9 @@ class BackendState:
         # Rewind support: state & dynamic vars tracking
         # Each entry: (transcript_len, value) recorded at turn boundaries and state changes
         self.state_timeline: List[Tuple[int, str]] = []  # (transcript_len, state_name)
-        self.dynamic_vars_snapshots: List[Tuple[int, Dict[str, Any]]] = []  # (transcript_len, vars_copy)
+        self.dynamic_vars_snapshots: List[
+            Tuple[int, Dict[str, Any]]
+        ] = []  # (transcript_len, vars_copy)
 
 
 state = BackendState()
@@ -610,7 +617,9 @@ async def handle_load_config(data: dict):
                 "event": "cli.load_config.fetched",
                 "call_id": call_id,
                 "has_raw_config": bool(raw_config),
-                "raw_config_keys": list(raw_config.keys()) if isinstance(raw_config, dict) else None,
+                "raw_config_keys": list(raw_config.keys())
+                if isinstance(raw_config, dict)
+                else None,
             }
         )
     except Exception as e:
@@ -908,7 +917,13 @@ async def _init_agent(config: dict, call_id: str, source: str):
         transcript = config.get("transcript", [])
 
         if transcript:
-            logger.debug({"event": "cli.init_agent.resume_mode", "call_id": call_id, "transcript_len": len(transcript)})
+            logger.debug(
+                {
+                    "event": "cli.init_agent.resume_mode",
+                    "call_id": call_id,
+                    "transcript_len": len(transcript),
+                }
+            )
             # Loaded session — build chat_ctx directly from the OpenAI-format
             # messages so they pass through create_custom_llm_chat_ctx unchanged.
             chat_ctx = _build_chat_ctx_from_openai_messages(transcript)
@@ -936,7 +951,9 @@ async def _init_agent(config: dict, call_id: str, source: str):
             # The config's llm_config has the starting_state, which is the state before
             # any transitions occurred in the original conversation.
             llm_config = config.get("llm_config", {})
-            original_starting_state = llm_config.get("starting_state", agent.state_manager.current_state)
+            original_starting_state = llm_config.get(
+                "starting_state", agent.state_manager.current_state
+            )
             state.state_timeline = _rebuild_state_timeline_from_transcript(
                 transcript, original_starting_state
             )
@@ -1056,6 +1073,7 @@ async def _init_agent(config: dict, call_id: str, source: str):
             last_complete_segment: str = ""
             tick_task: asyncio.Task | None = None
             if _CLI_VERBOSE:
+
                 async def _tick():
                     waited = 0
                     while True:
@@ -1313,14 +1331,23 @@ async def handle_rewind(data: dict):
         # 3. If the target assistant message has tool_calls, extend past
         #    the subsequent tool-result messages to keep the sequence intact.
         end_index = index + 1
-        if target_role in ("assistant", "agent") and full_transcript[index].get("tool_calls"):
-            while end_index < len(full_transcript) and full_transcript[end_index].get("role") == "tool":
+        if target_role in ("assistant", "agent") and full_transcript[index].get(
+            "tool_calls"
+        ):
+            while (
+                end_index < len(full_transcript)
+                and full_transcript[end_index].get("role") == "tool"
+            ):
                 end_index += 1
 
         truncated_transcript = full_transcript[:end_index]
 
         # 4. Determine the correct state for this point in history
-        target_state = state.state_timeline[0][1] if state.state_timeline else state.agent.state_manager.current_state
+        target_state = (
+            state.state_timeline[0][1]
+            if state.state_timeline
+            else state.agent.state_manager.current_state
+        )
         for tlen, sname in state.state_timeline:
             if tlen <= end_index:
                 target_state = sname
@@ -1328,7 +1355,9 @@ async def handle_rewind(data: dict):
                 break
 
         # 5. Determine the correct dynamic_vars for this point
-        target_dynamic_vars = state.dynamic_vars_snapshots[0][1] if state.dynamic_vars_snapshots else {}
+        target_dynamic_vars = (
+            state.dynamic_vars_snapshots[0][1] if state.dynamic_vars_snapshots else {}
+        )
         for tlen, dv in state.dynamic_vars_snapshots:
             if tlen <= end_index:
                 target_dynamic_vars = dv
@@ -1362,8 +1391,12 @@ async def handle_rewind(data: dict):
         state.transcript_snapshot = list(truncated_transcript)
 
         # 9. Prune timeline entries beyond the rewind point
-        state.state_timeline = [(t, s) for t, s in state.state_timeline if t <= end_index]
-        state.dynamic_vars_snapshots = [(t, d) for t, d in state.dynamic_vars_snapshots if t <= end_index]
+        state.state_timeline = [
+            (t, s) for t, s in state.state_timeline if t <= end_index
+        ]
+        state.dynamic_vars_snapshots = [
+            (t, d) for t, d in state.dynamic_vars_snapshots if t <= end_index
+        ]
 
         # 10. Emit rewind_complete with truncated messages for frontend display
         loaded_messages = _transcript_to_frontend_messages(truncated_transcript)
@@ -1421,7 +1454,10 @@ def _record_turn_end():
     transcript_len = len(_get_full_transcript())
     current = state.agent.state_manager.current_state
     # Only append if the position is new (avoid duplicates from _check_state_change)
-    if not state.state_timeline or state.state_timeline[-1] != (transcript_len, current):
+    if not state.state_timeline or state.state_timeline[-1] != (
+        transcript_len,
+        current,
+    ):
         state.state_timeline.append((transcript_len, current))
 
 
