@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Box, Text } from "ink";
 import TextInput from "ink-text-input";
 import { theme, glyph } from "../theme.js";
+import { logColor } from "../utils/logColor.js";
 
 type ConfigMode = "select" | "remote" | "local";
 
@@ -77,7 +78,7 @@ export function SetupScreen({
             </Text>
             {displayLines.length > 0 ? (
               displayLines.map((line, i) => (
-                <Text key={i} color={theme.muted} dimColor wrap="truncate">
+                <Text key={i} color={logColor(line)} wrap="wrap">
                   {line}
                 </Text>
               ))
