@@ -657,6 +657,8 @@ export function App({
         autopilotActive={autopilot.isActive}
         autopilotProgress={autopilot.isActive ? `${autopilot.currentIndex + 1}/${autopilot.totalCount}` : null}
         autopilotValue={autopilotValue}
+        dynamicPromptIndex={chat.dynamicPromptIndex}
+        dynamicPromptCondition={chat.dynamicPromptCondition}
       />
     </Box>
   );

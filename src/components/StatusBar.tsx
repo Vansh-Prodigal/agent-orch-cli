@@ -9,6 +9,8 @@ interface Props {
   isStreaming: boolean;
   rewindMode?: boolean;
   autopilotProgress?: string | null;
+  dynamicPromptIndex?: number | null;
+  dynamicPromptCondition?: string | null;
 }
 
 export function StatusBar({
@@ -18,6 +20,8 @@ export function StatusBar({
   isStreaming,
   rewindMode,
   autopilotProgress,
+  dynamicPromptIndex,
+  dynamicPromptCondition,
 }: Props) {
   return (
     <Box
@@ -42,6 +46,19 @@ export function StatusBar({
         <Text color={theme.muted}>
           cfg {glyph.dot} {configSource || "—"}
         </Text>
+        {dynamicPromptIndex != null && (
+          <>
+            <Text color={theme.border}> {glyph.sep} </Text>
+            <Text color={theme.info} bold>
+              dp:{dynamicPromptIndex}
+            </Text>
+            {dynamicPromptCondition && (
+              <Text color={theme.muted}>
+                {" "}{dynamicPromptCondition}
+              </Text>
+            )}
+          </>
+        )}
         {isStreaming && (
           <>
             <Text color={theme.border}> {glyph.sep} </Text>

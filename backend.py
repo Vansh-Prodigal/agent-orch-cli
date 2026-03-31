@@ -123,7 +123,7 @@ from custom_plugins.custom_llm.utils import (  # noqa: E402
     create_custom_llm_chat_ctx,
 )
 from proagent.agent import DynamicVariablesWebhook, ProAgent  # noqa: E402
-from proagent.prompts import get_state_system_prompt  # noqa: E402
+from proagent.prompts import get_state_system_prompt, _check_conditions  # noqa: E402
 from proagent.utils import (  # noqa: E402
     check_if_state_transition_tool,
     get_config_from_db,
@@ -729,13 +729,11 @@ async def handle_load_session(data: dict):
         transcript = [
             {k: v for k, v in msg.items() if k != "index"} for msg in messages
         ]
-        current_state = session_data.get("current_state")
-        call_id = session_data.get("call_id", generate_call_id())
+        call_id = session_data.get("call_id") or generate_call_id()
     else:
         # Original session format
         transcript = session_data.get("transcript", [])
-        current_state = session_data.get("currentState")
-        call_id = session_data.get("callId", generate_call_id())
+        call_id = session_data.get("callId") or generate_call_id()
 
     # Apply resume_from: slice transcript up to and including that index
     if resume_from is not None and isinstance(resume_from, int):
@@ -744,10 +742,22 @@ async def handle_load_session(data: dict):
         )
         transcript = transcript[: resume_from + 1]
 
-    # Inject transcript, state, and dynamic vars into config for reconstruction
+    # Infer current_state from transition tool calls in the transcript,
+    # falling back to the config's starting_state.
+    llm_config = config.get("llm_config", {})
+    starting_state = llm_config.get("starting_state", "")
+    if transcript:
+        timeline = _rebuild_state_timeline_from_transcript(transcript, starting_state)
+        inferred_state = timeline[-1][1] if timeline else starting_state
+    else:
+        inferred_state = starting_state
+
+    if inferred_state:
+        config["current_state"] = inferred_state
+        logger.info(f"Inferred current_state from transcript: {inferred_state}")
+
+    # Inject transcript and dynamic vars into config for reconstruction
     config["transcript"] = transcript
-    if current_state:
-        config["current_state"] = current_state
     dynamic_vars = session_data.get("dynamic_vars")
     if dynamic_vars:
         config["dynamic_vars"] = dynamic_vars
@@ -983,6 +993,7 @@ async def _init_agent(config: dict, call_id: str, source: str):
             # "next" assistant message. Otherwise, the UI appends the loaded
             # transcript *after* the streamed message, which looks like the
             # conversation "restarted".
+            dp_index, dp_condition = _get_dynamic_prompt_info()
             emit(
                 "config_loaded",
                 call_id=call_id,
@@ -991,6 +1002,8 @@ async def _init_agent(config: dict, call_id: str, source: str):
                 first_message="",
                 config=_safe_serialize(config),
                 loaded_messages=loaded_messages,
+                dynamic_prompt_index=dp_index,
+                dynamic_prompt_condition=dp_condition,
             )
 
             # Seed the transcript snapshot so we only emit tool_calls for NEW
@@ -999,54 +1012,37 @@ async def _init_agent(config: dict, call_id: str, source: str):
 
             streaming = False
             saw_usage = False
-            # On resume, we want exactly ONE assistant continuation message and
-            # then hand control back to the user. In practice, the StateLoop can
-            # make multiple internal LLM calls if the model invokes tools (e.g.
-            # execute_code) which can produce a second message that looks like a
-            # "restart". To prevent that, temporarily disable tools for this
-            # single resume continuation run.
-            original_get_tools = getattr(curr_state_loop, "get_tools", None)
 
-            async def _no_tools(_session):
-                return []
-
-            if original_get_tools is not None:
-                curr_state_loop.get_tools = _no_tools  # type: ignore[method-assign]
-
-            try:
-                async for chunk in curr_state_loop.run(
-                    chat_ctx,
-                    session,
-                    original_last_message_id=last_msg_id,
-                ):
-                    if isinstance(chunk, LLMTTFT):
-                        if _CLI_VERBOSE:
-                            logger.debug(
-                                {
-                                    "event": "cli.llm_ttft",
-                                    "call_id": call_id,
-                                    "ttft_seconds": chunk.ttft,
-                                }
-                            )
-                        continue
-                    if isinstance(chunk, LLMUsage):
-                        if streaming:
-                            emit("stream_end")
-                            streaming = False
-                        saw_usage = True
-                        continue
-                    if chunk and chunk.delta and chunk.delta.content:
-                        if saw_usage:
-                            _diff_and_emit_tool_calls()
-                            _check_state_change()
-                            saw_usage = False
-                        if not streaming:
-                            emit("stream_start")
-                            streaming = True
-                        emit("stream_chunk", text=chunk.delta.content)
-            finally:
-                if original_get_tools is not None:
-                    curr_state_loop.get_tools = original_get_tools  # type: ignore[method-assign]
+            async for chunk in curr_state_loop.run(
+                chat_ctx,
+                session,
+                original_last_message_id=last_msg_id,
+            ):
+                if isinstance(chunk, LLMTTFT):
+                    if _CLI_VERBOSE:
+                        logger.debug(
+                            {
+                                "event": "cli.llm_ttft",
+                                "call_id": call_id,
+                                "ttft_seconds": chunk.ttft,
+                            }
+                        )
+                    continue
+                if isinstance(chunk, LLMUsage):
+                    if streaming:
+                        emit("stream_end")
+                        streaming = False
+                    saw_usage = True
+                    continue
+                if chunk and chunk.delta and chunk.delta.content:
+                    if saw_usage:
+                        _diff_and_emit_tool_calls()
+                        _check_state_change()
+                        saw_usage = False
+                    if not streaming:
+                        emit("stream_start")
+                        streaming = True
+                    emit("stream_chunk", text=chunk.delta.content)
             if streaming:
                 emit("stream_end")
             _diff_and_emit_tool_calls()
@@ -1134,6 +1130,7 @@ async def _init_agent(config: dict, call_id: str, source: str):
             # Record turn-end state for rewind support
             _record_turn_end()
 
+            dp_index, dp_condition = _get_dynamic_prompt_info()
             emit(
                 "config_loaded",
                 call_id=call_id,
@@ -1141,6 +1138,8 @@ async def _init_agent(config: dict, call_id: str, source: str):
                 starting_state=state.agent.state_manager.current_state,
                 first_message=first_message,
                 config=_safe_serialize(config),
+                dynamic_prompt_index=dp_index,
+                dynamic_prompt_condition=dp_condition,
             )
     except Exception as e:
         logger.exception("Failed to initialize agent")
@@ -1431,6 +1430,59 @@ async def handle_shutdown(_data: dict):
 # ---------------------------------------------------------------------------
 
 
+def _get_dynamic_prompt_info() -> Tuple[Optional[int], Optional[str]]:
+    """Detect which dynamic prompt variant is active for the current state.
+
+    Uses the original config's dynamic_prompting definitions (since the
+    orchestrator replaces the state spec after applying a variant, losing
+    the dynamic_prompting field on the live spec).
+
+    Returns (index, condition_summary) or (None, None) if no dynamic prompting
+    is configured or no condition matched.
+    """
+    if not state.agent or not state.config:
+        return None, None
+    sm = state.agent.state_manager
+    current = sm.current_state
+    dynamic_vars = sm.dynamic_vars
+
+    # Look up original state config from the loaded config
+    llm_config = state.config.get("llm_config", {})
+    states_config = llm_config.get("states", [])
+    state_cfg = None
+    for s in states_config:
+        if isinstance(s, dict) and s.get("name") == current:
+            state_cfg = s
+            break
+    if not state_cfg:
+        return None, None
+
+    dynamic_prompting = state_cfg.get("dynamic_prompting")
+    if not dynamic_prompting:
+        return None, None
+
+    for i, dp in enumerate(dynamic_prompting):
+        conditions = dp.get("conditions", [])
+        if _check_conditions(conditions, dynamic_vars):
+            # Format conditions into a readable single-line summary
+            parts = []
+            for c in conditions:
+                key = c.get("key", "?")
+                op = c.get("operator", "eq")
+                val = c.get("value", "")
+                if op == "exists":
+                    parts.append(f"{key} exists")
+                elif op == "not_exists":
+                    parts.append(f"{key} !exists")
+                elif op in ("any_in_array_eq", "none_in_array_eq"):
+                    af = c.get("array_field", "")
+                    parts.append(f"{key}[].{af} {op} {val}")
+                else:
+                    parts.append(f"{key}={val}")
+            return i, " & ".join(parts)
+    return None, None
+
+
 def _check_state_change():
     """Emit state_changed if the agent state differs from last known."""
     if not state.agent:
@@ -1440,7 +1492,13 @@ def _check_state_change():
         state.last_state = current
         # Record mid-turn state change for rewind support
         state.state_timeline.append((len(state.transcript_snapshot), current))
-        emit("state_changed", state=current)
+        dp_index, dp_condition = _get_dynamic_prompt_info()
+        emit(
+            "state_changed",
+            state=current,
+            dynamic_prompt_index=dp_index,
+            dynamic_prompt_condition=dp_condition,
+        )
 
 
 def _record_turn_end():
