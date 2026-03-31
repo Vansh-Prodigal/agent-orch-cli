@@ -1437,6 +1437,9 @@ def _get_dynamic_prompt_info() -> Tuple[Optional[int], Optional[str]]:
     orchestrator replaces the state spec after applying a variant, losing
     the dynamic_prompting field on the live spec).
 
+    States in the config may be raw dicts (from JSON) or Pydantic model
+    objects (after ProAgentLLMConfig parsing). Both are handled.
+
     Returns (index, condition_summary) or (None, None) if no dynamic prompting
     is configured or no condition matched.
     """
@@ -1446,25 +1449,32 @@ def _get_dynamic_prompt_info() -> Tuple[Optional[int], Optional[str]]:
     current = sm.current_state
     dynamic_vars = sm.dynamic_vars
 
-    # Look up original state config from the loaded config
     llm_config = state.config.get("llm_config", {})
     states_config = llm_config.get("states", [])
-    state_cfg = None
-    for s in states_config:
-        if isinstance(s, dict) and s.get("name") == current:
-            state_cfg = s
-            break
-    if not state_cfg:
-        return None, None
 
-    dynamic_prompting = state_cfg.get("dynamic_prompting")
+    dynamic_prompting = None
+    for s in states_config:
+        if isinstance(s, dict):
+            if s.get("name") == current:
+                dynamic_prompting = s.get("dynamic_prompting")
+                break
+        else:
+            # Pydantic model — access via attribute
+            if getattr(s, "name", None) == current:
+                dp = getattr(s, "dynamic_prompting", None)
+                if dp:
+                    dynamic_prompting = [
+                        d if isinstance(d, dict) else (d.model_dump() if hasattr(d, "model_dump") else d)
+                        for d in dp
+                    ]
+                break
+
     if not dynamic_prompting:
         return None, None
 
     for i, dp in enumerate(dynamic_prompting):
         conditions = dp.get("conditions", [])
         if _check_conditions(conditions, dynamic_vars):
-            # Format conditions into a readable single-line summary
             parts = []
             for c in conditions:
                 key = c.get("key", "?")
