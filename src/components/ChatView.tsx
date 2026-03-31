@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import { ScrollView } from "ink-scroll-view";
 import type { ScrollViewRef } from "ink-scroll-view";
+import { useMouseScroll } from "../hooks/useMouseScroll.js";
 import type { ChatMessage } from "../protocol/types.js";
 import { theme, glyph } from "../theme.js";
 import { MessageBubble } from "./MessageBubble.js";
@@ -87,6 +88,9 @@ export function ChatView({
     },
     { isActive: true },
   );
+
+  // Mouse wheel scrolling (alternate scroll mode converts wheel → arrow keys)
+  useMouseScroll();
 
   return (
     <Box flexDirection="column" height={termHeight}>
