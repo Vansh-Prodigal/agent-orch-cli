@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
+import { useMouseScroll } from "../hooks/useMouseScroll.js";
 import { ScrollView } from "ink-scroll-view";
 import type { ScrollViewRef } from "ink-scroll-view";
-import { useMouseScroll } from "../hooks/useMouseScroll.js";
 import type { ChatMessage } from "../protocol/types.js";
 import { theme, glyph } from "../theme.js";
 import { MessageBubble } from "./MessageBubble.js";
@@ -31,6 +31,7 @@ interface Props {
   autopilotActive?: boolean;
   autopilotProgress?: string | null;
   autopilotValue?: string | null;
+  mouseMode?: boolean;
 }
 
 /** Build a keyboard hint segment. */
@@ -57,6 +58,7 @@ export function ChatView({
   autopilotActive,
   autopilotProgress,
   autopilotValue,
+  mouseMode = true,
 }: Props) {
   const scrollRef = useRef<ScrollViewRef>(null);
   const { stdout } = useStdout();
@@ -89,8 +91,13 @@ export function ChatView({
     { isActive: true },
   );
 
-  // Mouse wheel scrolling (alternate scroll mode converts wheel → arrow keys)
-  useMouseScroll();
+  // Mouse wheel scrolling
+  const handleMouseScroll = useCallback(
+    (delta: number) => scrollRef.current?.scrollBy(delta),
+    [],
+  );
+  useMouseScroll(handleMouseScroll, mouseMode);
+
 
   return (
     <Box flexDirection="column" height={termHeight}>
@@ -185,6 +192,7 @@ export function ChatView({
             hint("^P", "prompt"),
             hint("^B", "batch"),
             ...(autopilotActive ? [hint("^A", "autopilot")] : []),
+            hint("^T", mouseMode ? "select text" : "mouse scroll"),
             hint("^C", "exit"),
           ].join(sep)}
         </Text>

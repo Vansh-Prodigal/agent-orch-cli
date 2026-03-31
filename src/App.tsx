@@ -77,6 +77,7 @@ export function App({
   const [batchMode, setBatchMode] = useState(false);
   const [batchLines, setBatchLines] = useState<string[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [mouseMode, setMouseMode] = useState(true);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Show a status banner for at least `ms` milliseconds. */
@@ -111,6 +112,7 @@ export function App({
   const chat = useChat();
   const logs = useLogs();
   const session = useSession();
+
 
   const onEvent = useCallback(
     (event: BackendEvent) => {
@@ -544,6 +546,12 @@ export function App({
     onToggleBatch: handleToggleBatch,
     onRewind: handleRewind,
     onToggleAutopilot: handleToggleAutopilot,
+    onToggleMouseMode: () => {
+      setMouseMode((v) => {
+        showStatus(v ? "Mouse scroll OFF — text selection enabled" : "Mouse scroll ON");
+        return !v;
+      });
+    },
     enabled: phase !== "waiting",
   });
 
@@ -553,7 +561,7 @@ export function App({
   if (showLogs) {
     return (
       <Box flexDirection="column" flexGrow={1}>
-        <LogViewer lines={logs.lines} visible />
+        <LogViewer lines={logs.lines} visible mouseMode={mouseMode} />
         <Box>
           <Text color={theme.muted} dimColor>
             {glyph.bulletO} Esc close {glyph.dot} ^L logs {glyph.dot} ^C exit
@@ -571,6 +579,7 @@ export function App({
           items={rewindItems}
           onSelect={handleRewindSelect}
           onCancel={handleRewindCancel}
+          mouseMode={mouseMode}
         />
       </Box>
     );
@@ -664,6 +673,7 @@ export function App({
         autopilotActive={autopilot.isActive}
         autopilotProgress={autopilot.isActive ? `${autopilot.currentIndex + 1}/${autopilot.totalCount}` : null}
         autopilotValue={autopilotValue}
+        mouseMode={mouseMode}
       />
     </Box>
   );

@@ -11,6 +11,7 @@ export interface KeyboardActions {
   onToggleBatch: () => void;
   onRewind: () => void;
   onToggleAutopilot: () => void;
+  onToggleMouseMode: () => void;
   enabled: boolean;
 }
 
@@ -25,6 +26,7 @@ export interface KeyboardActions {
  * Ctrl+B  -> toggle batch input mode
  * Ctrl+R  -> enter rewind mode
  * Ctrl+A  -> disable autopilot
+ * Ctrl+T  -> toggle mouse scroll mode
  * Escape  -> close overlay / cancel
  */
 export function useKeyboard({
@@ -38,6 +40,7 @@ export function useKeyboard({
   onToggleBatch,
   onRewind,
   onToggleAutopilot,
+  onToggleMouseMode,
   enabled,
 }: KeyboardActions) {
   useInput(
@@ -60,6 +63,8 @@ export function useKeyboard({
         onRewind();
       } else if (key.ctrl && input === "a") {
         onToggleAutopilot();
+      } else if (key.ctrl && input === "t") {
+        onToggleMouseMode();
       } else if (key.escape) {
         onEscape();
       }

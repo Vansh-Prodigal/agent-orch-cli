@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
+import { useMouseScroll } from "../hooks/useMouseScroll.js";
 import TextInput from "ink-text-input";
 import { ScrollView } from "ink-scroll-view";
 import type { ScrollViewRef } from "ink-scroll-view";
@@ -18,9 +19,10 @@ interface Props {
   items: RewindItem[];
   onSelect: (transcriptIndex: number) => void;
   onCancel: () => void;
+  mouseMode?: boolean;
 }
 
-export function RewindOverlay({ items, onSelect, onCancel }: Props) {
+export function RewindOverlay({ items, onSelect, onCancel, mouseMode = true }: Props) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollViewRef>(null);
@@ -43,6 +45,13 @@ export function RewindOverlay({ items, onSelect, onCancel }: Props) {
     if (key.downArrow) scrollRef.current?.scrollBy(1);
     if (key.escape) onCancel();
   });
+
+  // Mouse wheel scrolling
+  const handleMouseScroll = useCallback(
+    (delta: number) => scrollRef.current?.scrollBy(delta),
+    [],
+  );
+  useMouseScroll(handleMouseScroll, mouseMode);
 
   const handleSubmit = (text: string) => {
     const trimmed = text.trim();

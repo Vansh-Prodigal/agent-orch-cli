@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
+import { useMouseScroll } from "../hooks/useMouseScroll.js";
 import { ScrollView } from "ink-scroll-view";
 import type { ScrollViewRef } from "ink-scroll-view";
 import { theme, glyph } from "../theme.js";
@@ -8,9 +9,10 @@ import { logColor } from "../utils/logColor.js";
 interface Props {
   lines: string[];
   visible: boolean;
+  mouseMode?: boolean;
 }
 
-export function LogViewer({ lines, visible }: Props) {
+export function LogViewer({ lines, visible, mouseMode = true }: Props) {
   if (!visible) return null;
 
   const scrollRef = useRef<ScrollViewRef>(null);
@@ -35,6 +37,13 @@ export function LogViewer({ lines, visible }: Props) {
     if (key.upArrow) scrollRef.current?.scrollBy(-1);
     if (key.downArrow) scrollRef.current?.scrollBy(1);
   });
+
+  // Mouse wheel scrolling
+  const handleMouseScroll = useCallback(
+    (delta: number) => scrollRef.current?.scrollBy(delta),
+    [],
+  );
+  useMouseScroll(handleMouseScroll, mouseMode);
 
   return (
     <Box
