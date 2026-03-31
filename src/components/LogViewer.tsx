@@ -3,6 +3,7 @@ import { Box, Text, useInput, useStdout } from "ink";
 import { ScrollView } from "ink-scroll-view";
 import type { ScrollViewRef } from "ink-scroll-view";
 import { theme, glyph } from "../theme.js";
+import { logColor } from "../utils/logColor.js";
 
 interface Props {
   lines: string[];
@@ -54,7 +55,7 @@ export function LogViewer({ lines, visible }: Props) {
       <Box flexGrow={1} overflow="hidden" flexDirection="column">
         <ScrollView ref={scrollRef}>
           {lines.map((line, i) => (
-            <Text key={i} color={theme.muted} dimColor wrap="truncate">
+            <Text key={i} color={logColor(line)} wrap="wrap">
               {line}
             </Text>
           ))}
