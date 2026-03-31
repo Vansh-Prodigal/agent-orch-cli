@@ -6,6 +6,7 @@ import type {
   ContextEvent,
   PromptEvent,
   RewindCompleteEvent,
+  StateChangedEvent,
   ToolCallInfo,
 } from "../protocol/types.js";
 import {
@@ -39,6 +40,8 @@ export function useChat() {
   const [callId, setCallId] = useState("");
   const [configSource, setConfigSource] = useState("");
   const [callEnded, setCallEnded] = useState(false);
+  const [dynamicPromptIndex, setDynamicPromptIndex] = useState<number | null>(null);
+  const [dynamicPromptCondition, setDynamicPromptCondition] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [finalTranscript, setFinalTranscript] = useState<
     Record<string, unknown>[] | null
@@ -73,6 +76,8 @@ export function useChat() {
       setConfigSource(cle.config_source);
       setCurrentState(cle.starting_state);
       currentStateRef.current = cle.starting_state;
+      setDynamicPromptIndex(cle.dynamic_prompt_index ?? null);
+      setDynamicPromptCondition(cle.dynamic_prompt_condition ?? null);
 
       // Display loaded messages from a session/chat export
       if (cle.loaded_messages && cle.loaded_messages.length > 0) {
@@ -127,8 +132,11 @@ export function useChat() {
       };
       setMessages((prev) => [...prev, msg]);
     } else if (isStateChanged(event)) {
-      setCurrentState(event.state);
-      currentStateRef.current = event.state;
+      const sce = event as StateChangedEvent;
+      setCurrentState(sce.state);
+      currentStateRef.current = sce.state;
+      setDynamicPromptIndex(sce.dynamic_prompt_index ?? null);
+      setDynamicPromptCondition(sce.dynamic_prompt_condition ?? null);
     } else if (isContext(event)) {
       setContextData((event as ContextEvent).messages);
     } else if (isPrompt(event)) {
@@ -174,6 +182,8 @@ export function useChat() {
     callId,
     configSource,
     callEnded,
+    dynamicPromptIndex,
+    dynamicPromptCondition,
     lastError,
     finalTranscript,
     contextData,

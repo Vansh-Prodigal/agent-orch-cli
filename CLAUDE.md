@@ -64,6 +64,10 @@ The CLI supports rewinding conversations to a previous message (Ctrl+R):
 - **Frontend**: `RewindOverlay` displays messages using the actual chat components (MessageBubble + ToolCallDisplay) with selectable 1-based indices. Only user/assistant messages are selectable; tool calls are included when their parent assistant message is selected.
 - **Protocol**: `rewind` command sends a transcript index; `rewind_complete` event returns truncated `loaded_messages`, `current_state`, and `dynamic_vars`.
 
+## Important Constraints
+
+- **Never modify the agent-orchestrator codebase** — all changes must be within the CLI (`cli/`). The agent-orchestrator is an upstream dependency; adapt to its interfaces on the CLI side only.
+
 ## Prodigal Technologies PR Standards
 
 PRs follow a standard template with: Description, Justification, Type (Emergency/Standard), Impact Assessment, Rollback Procedure, Testing, Security (OWASP Top 10), and Checklist sections.

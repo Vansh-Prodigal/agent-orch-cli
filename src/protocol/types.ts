@@ -93,6 +93,8 @@ export interface ConfigLoadedEvent {
   first_message: string;
   config: Record<string, unknown>;
   loaded_messages?: LoadedMessage[];
+  dynamic_prompt_index?: number | null;
+  dynamic_prompt_condition?: string | null;
 }
 
 export interface StreamStartEvent {
@@ -123,6 +125,8 @@ export interface ToolCallsEvent {
 export interface StateChangedEvent {
   event: "state_changed";
   state: string;
+  dynamic_prompt_index?: number | null;
+  dynamic_prompt_condition?: string | null;
 }
 
 export interface ContextEvent {
