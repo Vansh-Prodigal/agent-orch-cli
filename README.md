@@ -113,12 +113,18 @@ While chatting:
 - **Ctrl+P**: export assembled prompt markdown to `cli/exports/prompts/`
 - **Ctrl+L**: toggle log viewer
 - **Ctrl+B**: batch input mode
-- **Up/Down arrows**: scroll the message list
+- **Ctrl+A**: toggle autopilot mode (auto-run a pre-seeded list of user turns)
+- **Ctrl+T**: toggle between mouse-scroll and native text-select mode
+- **Up/Down arrows / mouse wheel**: scroll the message list (main screen is fully scrollable)
 - **Ctrl+C**: exit
 
 ### Rewinding a conversation
 
 Press **Ctrl+R** to enter rewind mode. A full-screen overlay shows all user and assistant messages with numbered indices. Type a number and press Enter to rewind to that message — the conversation is truncated to that point (including the correct agent state and dynamic variables), and you can continue from there. Press Escape to cancel.
+
+### Status bar
+
+The top status bar shows the call context, current state, and — when the agent's general prompt is running a dynamic-prompt override — a `dp:N` indicator with the active dynamic-prompt index and its matched condition.
 
 Exports live under `cli/exports/` and are ignored by git (`cli/.gitignore`).
 
