@@ -32,6 +32,8 @@ interface Props {
   autopilotProgress?: string | null;
   autopilotValue?: string | null;
   mouseMode?: boolean;
+  dynamicPromptIndex?: number | null;
+  dynamicPromptCondition?: string | null;
 }
 
 /** Build a keyboard hint segment. */
@@ -59,6 +61,8 @@ export function ChatView({
   autopilotProgress,
   autopilotValue,
   mouseMode = true,
+  dynamicPromptIndex,
+  dynamicPromptCondition,
 }: Props) {
   const scrollRef = useRef<ScrollViewRef>(null);
   const { stdout } = useStdout();
@@ -110,6 +114,8 @@ export function ChatView({
           isStreaming={isStreaming}
           rewindMode={rewindMode}
           autopilotProgress={autopilotProgress}
+          dynamicPromptIndex={dynamicPromptIndex}
+          dynamicPromptCondition={dynamicPromptCondition}
         />
       </Box>
 

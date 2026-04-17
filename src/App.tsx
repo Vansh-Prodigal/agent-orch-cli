@@ -674,6 +674,8 @@ export function App({
         autopilotProgress={autopilot.isActive ? `${autopilot.currentIndex + 1}/${autopilot.totalCount}` : null}
         autopilotValue={autopilotValue}
         mouseMode={mouseMode}
+        dynamicPromptIndex={chat.dynamicPromptIndex}
+        dynamicPromptCondition={chat.dynamicPromptCondition}
       />
     </Box>
   );
