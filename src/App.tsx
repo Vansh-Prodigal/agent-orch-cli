@@ -77,6 +77,18 @@ export function App({
   const [batchMode, setBatchMode] = useState(false);
   const [batchLines, setBatchLines] = useState<string[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [mouseMode, setMouseMode] = useState(true);
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Show a status banner for at least `ms` milliseconds. */
+  const showStatus = useCallback((msg: string, ms = 3000) => {
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    setStatusMessage(msg);
+    statusTimerRef.current = setTimeout(() => {
+      setStatusMessage(null);
+      statusTimerRef.current = null;
+    }, ms);
+  }, []);
 
   // Rewind state
   const [showRewind, setShowRewind] = useState(false);
@@ -100,6 +112,7 @@ export function App({
   const chat = useChat();
   const logs = useLogs();
   const session = useSession();
+
 
   const onEvent = useCallback(
     (event: BackendEvent) => {
@@ -188,11 +201,10 @@ export function App({
           const markdown = `# System Prompt — state: ${stateName}\nGenerated: ${new Date().toISOString()}\n\n${dynamicVarsSection}## Assembled Prompt\n${pe.prompt}\n`;
 
           writeFileSync(filePath, markdown, "utf-8");
-          setStatusMessage(`Prompt exported to ${filePath}`);
+          showStatus(`Prompt exported to ${filePath}`);
         } catch (e) {
-          setStatusMessage(`Prompt export failed: ${e}`);
+          showStatus(`Prompt export failed: ${e}`);
         }
-        setTimeout(() => setStatusMessage(null), 3000);
         return; // Don't pass to chat.handleEvent
       }
 
@@ -314,11 +326,10 @@ export function App({
           };
 
           writeFileSync(filePath, JSON.stringify(exportData, null, 2), "utf-8");
-          setStatusMessage(`Chat exported to ${filePath}`);
+          showStatus(`Chat exported to ${filePath}`);
         } catch (e) {
-          setStatusMessage(`Chat export failed: ${e}`);
+          showStatus(`Chat export failed: ${e}`);
         }
-        setTimeout(() => setStatusMessage(null), 3000);
         return; // Don't pass to chat.handleEvent
       }
 
@@ -453,9 +464,8 @@ export function App({
       transcript: chat.finalTranscript || [],
       currentState: chat.currentState,
     });
-    setStatusMessage(`Session saved to ${path}`);
-    setTimeout(() => setStatusMessage(null), 3000);
-  }, [chat, session]);
+    showStatus(`Session saved to ${path}`);
+  }, [chat, session, showStatus]);
 
   // --- Rewind ---
 
@@ -501,10 +511,9 @@ export function App({
   const handleToggleAutopilot = useCallback(() => {
     if (autopilot.isActive) {
       autopilot.disable();
-      setStatusMessage("Autopilot disabled");
-      setTimeout(() => setStatusMessage(null), 3000);
+      showStatus("Autopilot disabled");
     }
-  }, [autopilot]);
+  }, [autopilot, showStatus]);
 
   useKeyboard({
     onExport: handleExport,
@@ -537,6 +546,12 @@ export function App({
     onToggleBatch: handleToggleBatch,
     onRewind: handleRewind,
     onToggleAutopilot: handleToggleAutopilot,
+    onToggleMouseMode: () => {
+      setMouseMode((v) => {
+        showStatus(v ? "Mouse scroll OFF — text selection enabled" : "Mouse scroll ON");
+        return !v;
+      });
+    },
     enabled: phase !== "waiting",
   });
 
@@ -546,7 +561,7 @@ export function App({
   if (showLogs) {
     return (
       <Box flexDirection="column" flexGrow={1}>
-        <LogViewer lines={logs.lines} visible />
+        <LogViewer lines={logs.lines} visible mouseMode={mouseMode} />
         <Box>
           <Text color={theme.muted} dimColor>
             {glyph.bulletO} Esc close {glyph.dot} ^L logs {glyph.dot} ^C exit
@@ -564,6 +579,7 @@ export function App({
           items={rewindItems}
           onSelect={handleRewindSelect}
           onCancel={handleRewindCancel}
+          mouseMode={mouseMode}
         />
       </Box>
     );
@@ -657,6 +673,7 @@ export function App({
         autopilotActive={autopilot.isActive}
         autopilotProgress={autopilot.isActive ? `${autopilot.currentIndex + 1}/${autopilot.totalCount}` : null}
         autopilotValue={autopilotValue}
+        mouseMode={mouseMode}
         dynamicPromptIndex={chat.dynamicPromptIndex}
         dynamicPromptCondition={chat.dynamicPromptCondition}
       />
