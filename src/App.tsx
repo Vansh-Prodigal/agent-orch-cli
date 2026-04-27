@@ -452,6 +452,19 @@ export function App({
     agent.sendCommand(cmds.getContext());
   }, [agent]);
 
+  const handleDumpLogs = useCallback(() => {
+    const dir = ensureExportsDir("logs");
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const id = chat.callId || ts;
+    const path = join(dir, `logs_${id}.log`);
+    try {
+      logs.dumpToFile(path);
+      showStatus(`Logs dumped to ${path}`);
+    } catch (e) {
+      showStatus(`Log dump failed: ${e}`);
+    }
+  }, [logs, chat.callId, showStatus]);
+
   const handleSaveSession = useCallback(() => {
     const dir = ensureExportsDir("sessions");
     const ts = new Date().toISOString().replace(/[:.]/g, "-");
@@ -561,10 +574,17 @@ export function App({
   if (showLogs) {
     return (
       <Box flexDirection="column" flexGrow={1}>
-        <LogViewer lines={logs.lines} visible mouseMode={mouseMode} />
+        <LogViewer lines={logs.lines} visible mouseMode={mouseMode} onDump={handleDumpLogs} />
+        {statusMessage && (
+          <Box paddingX={1}>
+            <Text color={theme.success}>
+              {glyph.check} {statusMessage}
+            </Text>
+          </Box>
+        )}
         <Box>
           <Text color={theme.muted} dimColor>
-            {glyph.bulletO} Esc close {glyph.dot} ^L logs {glyph.dot} ^C exit
+            {glyph.bulletO} s dump to file {glyph.dot} Esc close {glyph.dot} ^L logs {glyph.dot} ^C exit
           </Text>
         </Box>
       </Box>
