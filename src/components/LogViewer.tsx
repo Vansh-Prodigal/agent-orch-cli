@@ -10,9 +10,10 @@ interface Props {
   lines: string[];
   visible: boolean;
   mouseMode?: boolean;
+  onDump?: () => void;
 }
 
-export function LogViewer({ lines, visible, mouseMode = true }: Props) {
+export function LogViewer({ lines, visible, mouseMode = true, onDump }: Props) {
   if (!visible) return null;
 
   const scrollRef = useRef<ScrollViewRef>(null);
@@ -33,9 +34,10 @@ export function LogViewer({ lines, visible, mouseMode = true }: Props) {
   }, [stdout]);
 
   // Scroll keyboard handling
-  useInput((_input, key) => {
+  useInput((input, key) => {
     if (key.upArrow) scrollRef.current?.scrollBy(-1);
     if (key.downArrow) scrollRef.current?.scrollBy(1);
+    if (input === "s" && onDump) onDump();
   });
 
   // Mouse wheel scrolling
@@ -57,7 +59,7 @@ export function LogViewer({ lines, visible, mouseMode = true }: Props) {
         <Text color={theme.warning} bold>
           {glyph.diamondD} Logs
           <Text color={theme.muted}>
-            {" "}({lines.length} lines) {glyph.dot} {"\u2191\u2193"} scroll {glyph.dot} Escape to close
+            {" "}({lines.length} lines) {glyph.dot} {"\u2191\u2193"} scroll {glyph.dot} s dump {glyph.dot} Escape to close
           </Text>
         </Text>
       </Box>

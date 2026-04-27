@@ -34,6 +34,7 @@ interface Props {
   mouseMode?: boolean;
   dynamicPromptIndex?: number | null;
   dynamicPromptCondition?: string | null;
+  builtinStates?: Set<string>;
 }
 
 /** Build a keyboard hint segment. */
@@ -63,6 +64,7 @@ export function ChatView({
   mouseMode = true,
   dynamicPromptIndex,
   dynamicPromptCondition,
+  builtinStates,
 }: Props) {
   const scrollRef = useRef<ScrollViewRef>(null);
   const { stdout } = useStdout();
@@ -126,7 +128,7 @@ export function ChatView({
             <Box key={msg.id} flexDirection="column">
               <MessageBubble message={msg} />
               {msg.toolCalls && msg.toolCalls.length > 0 && (
-                <ToolCallDisplay toolCalls={msg.toolCalls} />
+                <ToolCallDisplay toolCalls={msg.toolCalls} builtinStates={builtinStates} />
               )}
             </Box>
           ))}

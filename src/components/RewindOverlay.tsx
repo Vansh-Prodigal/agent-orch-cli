@@ -20,9 +20,10 @@ interface Props {
   onSelect: (transcriptIndex: number) => void;
   onCancel: () => void;
   mouseMode?: boolean;
+  builtinStates?: Set<string>;
 }
 
-export function RewindOverlay({ items, onSelect, onCancel, mouseMode = true }: Props) {
+export function RewindOverlay({ items, onSelect, onCancel, mouseMode = true, builtinStates }: Props) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollViewRef>(null);
@@ -92,7 +93,7 @@ export function RewindOverlay({ items, onSelect, onCancel, mouseMode = true }: P
               <Box flexDirection="column" flexGrow={1}>
                 <MessageBubble message={item.message} />
                 {item.message.toolCalls && item.message.toolCalls.length > 0 && (
-                  <ToolCallDisplay toolCalls={item.message.toolCalls} />
+                  <ToolCallDisplay toolCalls={item.message.toolCalls} builtinStates={builtinStates} />
                 )}
               </Box>
             </Box>
