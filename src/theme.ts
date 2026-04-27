@@ -15,6 +15,8 @@ export const theme = {
   info: "#51a8ff",
   /** Geist purple — tool calls, streaming indicator, special accents */
   accent: "#be79f0",
+  /** Lighter lilac — transitions into builtin states */
+  builtin: "#d4a3ff",
   /** Gray-600 — secondary/muted text */
   muted: "#888888",
   /** Gray-1000 — strong emphasis, body text */

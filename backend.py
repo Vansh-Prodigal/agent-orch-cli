@@ -123,7 +123,12 @@ from custom_plugins.custom_llm.utils import (  # noqa: E402
     create_custom_llm_chat_ctx,
 )
 from proagent.agent import DynamicVariablesWebhook, ProAgent  # noqa: E402
-from proagent.prompts import get_state_system_prompt, _check_conditions  # noqa: E402
+from proagent.prompts import (  # noqa: E402
+    _check_conditions,
+    get_greetings_and_rpc_system_message,
+    get_state_system_prompt,
+)
+from proagent.state_loop import GreetingsAndRPCLoop  # noqa: E402
 from proagent.utils import (  # noqa: E402
     check_if_state_transition_tool,
     get_config_from_db,
@@ -137,6 +142,7 @@ from schemas.events import (  # noqa: E402
 from schemas.types import (  # noqa: E402
     LLMTTFT,
     CallDirection,
+    GreetingsAndRPCStateSpec,
     LLMUsage,
     ProAgentLLMConfig,
 )
@@ -191,6 +197,21 @@ class MockCallService:
 
     def __init__(self):
         self._agent_session = None
+        self.events: List[Any] = []
+
+    def add_event(self, event):
+        """Record CallEvents emitted by state loops (e.g. GreetingsAndRPCLoop's
+        rpc_verification_started/completed/failed) so they don't crash the simulator."""
+        self.events.append(event)
+        try:
+            logger.info(
+                "call_event: name=%s source=%s value=%s",
+                getattr(event, "event_name", "?"),
+                getattr(event, "source", "?"),
+                getattr(event, "value", {}),
+            )
+        except Exception:
+            pass
 
     async def update_call_details_in_redis(self, details: dict):
         pass
@@ -1267,12 +1288,36 @@ async def handle_get_prompt(_data: dict):
 
     sm = state.agent.state_manager
     llm_config = state.agent.proagent_llm_config
+    spec = sm.current_state_spec
 
-    prompt = get_state_system_prompt(
-        general_prompt=llm_config.general_prompt,
-        state_prompt=sm.current_state_spec.state_prompt,
-        dynamic_vars=sm.dynamic_vars,
-    )
+    if isinstance(spec, GreetingsAndRPCStateSpec):
+        loop = state.agent.state_loops.get(sm.current_state)
+        current_stage = None
+        verified_fields: set = set()
+        exhausted_fields: set = set()
+        verification_failed = False
+        if isinstance(loop, GreetingsAndRPCLoop):
+            stages = loop.pii_stages
+            idx = loop._current_pii_stage
+            current_stage = stages[idx] if idx < len(stages) else None
+            verified_fields = loop._verified_fields
+            exhausted_fields = loop._exhausted_fields
+            verification_failed = loop.is_verification_failed
+        prompt = get_greetings_and_rpc_system_message(
+            state_spec=spec,
+            current_verification_stage=current_stage,
+            verified_fields=verified_fields,
+            exhausted_fields=exhausted_fields,
+            verification_failed=verification_failed,
+            dynamic_vars=sm.dynamic_vars,
+        )
+    else:
+        prompt = get_state_system_prompt(
+            general_prompt=llm_config.general_prompt,
+            state_prompt=spec.state_prompt,
+            dynamic_vars=sm.dynamic_vars,
+        )
+
     emit(
         "prompt",
         prompt=prompt,

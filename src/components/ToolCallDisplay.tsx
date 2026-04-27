@@ -10,17 +10,28 @@ const HIGHLIGHT_TOOLS = new Set([
   "execute_code",
 ]);
 
+const TRANSITION_PREFIX = "transition_to_";
+
 interface Props {
   toolCalls: ToolCallInfo[];
+  builtinStates?: Set<string>;
 }
 
-export function ToolCallDisplay({ toolCalls }: Props) {
+export function ToolCallDisplay({ toolCalls, builtinStates }: Props) {
   if (!toolCalls.length) return null;
 
   return (
     <Box flexDirection="column" marginLeft={2} marginBottom={0}>
       {toolCalls.map((tc) => {
-        const color = HIGHLIGHT_TOOLS.has(tc.name) ? theme.warning : theme.accent;
+        const isTransition = tc.name.startsWith(TRANSITION_PREFIX);
+        const dest = isTransition ? tc.name.slice(TRANSITION_PREFIX.length) : "";
+        const isBuiltinTransition =
+          isTransition && !!builtinStates && builtinStates.has(dest);
+        const color = HIGHLIGHT_TOOLS.has(tc.name)
+          ? theme.warning
+          : isBuiltinTransition
+            ? theme.builtin
+            : theme.accent;
         return (
           <Box
             key={tc.tool_call_id}
@@ -33,6 +44,12 @@ export function ToolCallDisplay({ toolCalls }: Props) {
               <Text color={color} bold>
                 {glyph.star} {tc.name}
               </Text>
+              {isBuiltinTransition && (
+                <Text color={color} dimColor>
+                  {" "}
+                  [type: builtin]
+                </Text>
+              )}
             </Text>
             {tc.arguments && (
               <Text color={theme.muted}>

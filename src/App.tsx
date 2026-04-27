@@ -47,6 +47,19 @@ function ensureExportsDir(subdir: string): string {
   return dir;
 }
 
+function extractBuiltinStateNames(config: Record<string, unknown>): Set<string> {
+  const names = new Set<string>();
+  const llmConfig = config?.llm_config as Record<string, unknown> | undefined;
+  const states = llmConfig?.states as Array<Record<string, unknown>> | undefined;
+  if (!Array.isArray(states)) return names;
+  for (const s of states) {
+    if (s && typeof s === "object" && s.type === "builtin" && typeof s.name === "string") {
+      names.add(s.name);
+    }
+  }
+  return names;
+}
+
 export interface AppProps {
   toNumber?: string;
   fromNumber?: string;
@@ -96,6 +109,7 @@ export function App({
   const pendingRewindContext = useRef(false);
 
   const configRef = useRef<Record<string, unknown>>({});
+  const [builtinStates, setBuiltinStates] = useState<Set<string>>(new Set());
 
   // Pending export flags — when set, the next prompt/context event is
   // intercepted for file export instead of being passed to useChat.
@@ -345,6 +359,7 @@ export function App({
         const cle = event as { config?: Record<string, unknown> };
         if (cle.config) {
           configRef.current = cle.config;
+          setBuiltinStates(extractBuiltinStateNames(cle.config));
         }
         setPhase("chatting");
       }
@@ -600,6 +615,7 @@ export function App({
           onSelect={handleRewindSelect}
           onCancel={handleRewindCancel}
           mouseMode={mouseMode}
+          builtinStates={builtinStates}
         />
       </Box>
     );
@@ -696,6 +712,7 @@ export function App({
         mouseMode={mouseMode}
         dynamicPromptIndex={chat.dynamicPromptIndex}
         dynamicPromptCondition={chat.dynamicPromptCondition}
+        builtinStates={builtinStates}
       />
     </Box>
   );
