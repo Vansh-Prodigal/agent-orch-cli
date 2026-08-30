@@ -1,0 +1,407 @@
+{
+  "status": "complete",
+  "started_at": "2026-04-28 14:52:06 IST",
+  "updated_at": "2026-04-28 14:52:41 IST",
+  "finished_at": "2026-04-28 14:52:41 IST",
+  "report_path": "/Users/vansh/Developer/agent-orchestrator/cli/exports/artefacts/reference-number-live-report.html",
+  "data_path": "/Users/vansh/Developer/agent-orchestrator/cli/exports/artefacts/reference-number-live-data.json",
+  "to_number": "7066226252",
+  "reference_number": "70360256",
+  "expected_consumer_id": "70360256",
+  "expected_success_state": "s2a_verify_name",
+  "summary": {
+    "scenario_count": 3,
+    "passed_scenarios": 3,
+    "total_checks": 19,
+    "passed_checks": 19
+  },
+  "scenarios": [
+    {
+      "key": "scenario-1",
+      "title": "Reference Number Offered First",
+      "description": "User says they have a reference number, then supplies it when asked.",
+      "from_number": "9998887777",
+      "expected": [
+        "Greeting should still ask for phone number and should not proactively mention reference number.",
+        "After the user says they have a reference number, the agent should ask for it.",
+        "Lookup should use reference_number=70360256 and resolve KELSEY HOWE.",
+        "Call should leave s1 and land in s2a_verify_name."
+      ],
+      "status": "complete",
+      "verdict": "pass",
+      "call_id": "call_simulation_342996d",
+      "starting_state": "s1_verify_consumer",
+      "current_state": "s2a_verify_name",
+      "first_message": "Hi. Thanks for calling American Express. I'm your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I'm having trouble pulling up your information using the number that you're calling from. May I please have the phone number that you have on file with us?",
+      "checks": [
+        {
+          "name": "Greeting stays on phone lookup",
+          "passed": true,
+          "expected": "Greeting should ask for phone number and not proactively mention reference number.",
+          "actual": "Hi. Thanks for calling American Express. I'm your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I'm having trouble pulling up your information using the number that you're calling from. May I please have the phone number that you have on file with us?"
+        },
+        {
+          "name": "Reactive offer is accepted",
+          "passed": true,
+          "expected": "After the user says they have a reference number, the agent should ask for it.",
+          "actual": "Thank you for letting me know. I can look you up using that reference number. What's the reference number you have?"
+        },
+        {
+          "name": "Lookup uses reference_number parameter",
+          "passed": true,
+          "expected": "The successful lookup should call get_details_from_contact with reference_number=70360256.",
+          "actual": "{\"reference_number\": \"70360256\"}"
+        },
+        {
+          "name": "Correct consumer was loaded",
+          "passed": true,
+          "expected": "The loaded user_details.consumer_id should be 70360256.",
+          "actual": "70360256"
+        },
+        {
+          "name": "Lookup exits s1 into name verification",
+          "passed": true,
+          "expected": "After successful lookup, the call should move into s2a_verify_name.",
+          "actual": "s2a_verify_name"
+        },
+        {
+          "name": "Post-lookup prompt is name verification",
+          "passed": true,
+          "expected": "The next assistant prompt should ask for the consumer's full name.",
+          "actual": "Could you please help me with your full name?"
+        }
+      ],
+      "error": null,
+      "timeline": [
+        {
+          "ts": "2026-04-28 14:52:17 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "Hi. Thanks for calling American Express. I'm your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I'm having trouble pulling up your information using the number that you're calling from. May I please have the phone number that you have on file with us?"
+        },
+        {
+          "ts": "2026-04-28 14:52:17 IST",
+          "kind": "user",
+          "label": "User",
+          "text": "I have a reference number"
+        },
+        {
+          "ts": "2026-04-28 14:52:19 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "Thank you for letting me know. I can look you up using that reference number. What's the reference number you have?"
+        },
+        {
+          "ts": "2026-04-28 14:52:19 IST",
+          "kind": "user",
+          "label": "User",
+          "text": "70360256"
+        },
+        {
+          "ts": "2026-04-28 14:52:21 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "Thank you.\nLet me look that up for you. <break time=\"500ms\" />"
+        },
+        {
+          "ts": "2026-04-28 14:52:28 IST",
+          "kind": "tool",
+          "label": "Tool",
+          "text": "get_details_from_contact args={\"reference_number\": \"70360256\"} result=consumer_id=70360256, name=KELSEY HOWE"
+        },
+        {
+          "ts": "2026-04-28 14:52:28 IST",
+          "kind": "tool",
+          "label": "Tool",
+          "text": "transition_to_s2a_verify_name args={\"lookup_method\": \"reference_number\"} result=Transitioned to \"s2a_verify_name\" state"
+        },
+        {
+          "ts": "2026-04-28 14:52:28 IST",
+          "kind": "state",
+          "label": "State",
+          "text": "s2a_verify_name"
+        },
+        {
+          "ts": "2026-04-28 14:52:28 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "Could you please help me with your full name?"
+        },
+        {
+          "ts": "2026-04-28 14:52:29 IST",
+          "kind": "system",
+          "label": "Context",
+          "text": "Captured context snapshot at state s2a_verify_name"
+        }
+      ]
+    },
+    {
+      "key": "scenario-2",
+      "title": "Bad Phone Then Reference Number",
+      "description": "User gives a wrong phone number, confirms it, gets the SSN offer, then switches to a reference number.",
+      "from_number": "9998886666",
+      "expected": [
+        "Greeting should stay on phone-number collection.",
+        "Wrong phone number should be looked up as phone, then echoed for confirmation.",
+        "After confirmation, the agent should offer SSN without proactively mentioning reference number.",
+        "When the user then volunteers a reference number, the agent should accept it and resolve KELSEY HOWE."
+      ],
+      "status": "complete",
+      "verdict": "pass",
+      "call_id": "call_simulation_d2c8eb1",
+      "starting_state": "s1_verify_consumer",
+      "current_state": "s2a_verify_name",
+      "first_message": "Hi. Thanks for calling American Express. I'm your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I'm having trouble pulling up your information using the number that you're calling from. May I please have the phone number that you have on file with us?",
+      "checks": [
+        {
+          "name": "Greeting stays on phone lookup",
+          "passed": true,
+          "expected": "Greeting should ask for phone number and not proactively mention reference number.",
+          "actual": "Hi. Thanks for calling American Express. I'm your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I'm having trouble pulling up your information using the number that you're calling from. May I please have the phone number that you have on file with us?"
+        },
+        {
+          "name": "Incorrect phone is treated as phone lookup",
+          "passed": true,
+          "expected": "The first failed lookup should use the phone parameter with 1112223333.",
+          "actual": "I wasn't able to find any information with the phone number one one one <break time=\"0.25s\" /> two two two <break time=\"0.25s\" /> three three three three. Was that the correct number?"
+        },
+        {
+          "name": "Phone failure triggers confirmation",
+          "passed": true,
+          "expected": "After an empty phone lookup, the agent should echo the number back and ask if it was correct.",
+          "actual": "I wasn't able to find any information with the phone number one one one <break time=\"0.25s\" /> two two two <break time=\"0.25s\" /> three three three three. Was that the correct number?"
+        },
+        {
+          "name": "Confirmed bad phone leads to SSN offer",
+          "passed": true,
+          "expected": "After the phone is confirmed correct, the agent should offer SSN and still not proactively mention reference number.",
+          "actual": "I can also try looking you up with your Social Security number. May I have your full Social Security number?"
+        },
+        {
+          "name": "Reference number is accepted mid-flow",
+          "passed": true,
+          "expected": "When the user volunteers a reference number after the SSN offer, the agent should ask for it.",
+          "actual": "Of course, I can look you up with that. What's your reference number?"
+        },
+        {
+          "name": "Mid-flow lookup uses reference_number parameter",
+          "passed": true,
+          "expected": "The final successful lookup should use reference_number=70360256.",
+          "actual": "{'name': 'get_details_from_contact', 'arguments': {'reference_number': '70360256'}, 'result': {'user_details': {'consumer_id': '70360256', 'first_name': 'KELSEY', 'last_name': 'HOWE', 'emails': ['Ethan.Shannon@na.firstsource.com'], 'ssn': '0613', 'dob': '1992', 'zipcode': '97405', 'address': '285 E 37TH AVE', 'city': 'EUGENE', 'state': 'OR'}, 'account_details': [{'account_id': '70360256', 'consumer_id': '70360256', 'debt_amount': '500.0', 'status': 'ACT', 'additional_fields': {'apollo_eligible': False, 'oasis_eligible': True, 'non_digital': False, 'ud_status': False, 'oos_status': False, 'is_po_box': False, 'card_type': 'OP', 'oasis_limit': '500.00', 'card_open_date': '2018-08-17', 'min_settlement_pct': '30', 'max_post_charge_months': '36', 'max_payment_start_date': '30', 'card_type_name': 'CASH MAGNET'}}]}}"
+        },
+        {
+          "name": "Correct consumer was loaded",
+          "passed": true,
+          "expected": "The loaded user_details.consumer_id should be 70360256.",
+          "actual": "70360256"
+        },
+        {
+          "name": "Lookup exits s1 into name verification",
+          "passed": true,
+          "expected": "After successful lookup, the call should move into s2a_verify_name.",
+          "actual": "s2a_verify_name"
+        }
+      ],
+      "error": null,
+      "timeline": [
+        {
+          "ts": "2026-04-28 14:52:19 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "Hi. Thanks for calling American Express. I'm your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I'm having trouble pulling up your information using the number that you're calling from. May I please have the phone number that you have on file with us?"
+        },
+        {
+          "ts": "2026-04-28 14:52:19 IST",
+          "kind": "user",
+          "label": "User",
+          "text": "1112223333"
+        },
+        {
+          "ts": "2026-04-28 14:52:23 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "Thank you.\nLet me look that up for you. <break time=\"500ms\" />"
+        },
+        {
+          "ts": "2026-04-28 14:52:25 IST",
+          "kind": "tool",
+          "label": "Tool",
+          "text": "get_details_from_contact args={\"phone\": \"1112223333\"} result={\"message\": \"No consumers found for the given search criteria\"}"
+        },
+        {
+          "ts": "2026-04-28 14:52:27 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "I wasn't able to find any information with the phone number one one one <break time=\"0.25s\" /> two two two <break time=\"0.25s\" /> three three three three. Was that the correct number?"
+        },
+        {
+          "ts": "2026-04-28 14:52:27 IST",
+          "kind": "user",
+          "label": "User",
+          "text": "yes"
+        },
+        {
+          "ts": "2026-04-28 14:52:29 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "I can also try looking you up with your Social Security number. May I have your full Social Security number?"
+        },
+        {
+          "ts": "2026-04-28 14:52:29 IST",
+          "kind": "user",
+          "label": "User",
+          "text": "I have a reference number"
+        },
+        {
+          "ts": "2026-04-28 14:52:31 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "Of course, I can look you up with that. What's your reference number?"
+        },
+        {
+          "ts": "2026-04-28 14:52:31 IST",
+          "kind": "user",
+          "label": "User",
+          "text": "70360256"
+        },
+        {
+          "ts": "2026-04-28 14:52:33 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "Thank you.\nLet me look that up for you. <break time=\"500ms\" />"
+        },
+        {
+          "ts": "2026-04-28 14:52:40 IST",
+          "kind": "tool",
+          "label": "Tool",
+          "text": "get_details_from_contact args={\"reference_number\": \"70360256\"} result=consumer_id=70360256, name=KELSEY HOWE"
+        },
+        {
+          "ts": "2026-04-28 14:52:40 IST",
+          "kind": "tool",
+          "label": "Tool",
+          "text": "transition_to_s2a_verify_name args={\"lookup_method\": \"reference_number\"} result=Transitioned to \"s2a_verify_name\" state"
+        },
+        {
+          "ts": "2026-04-28 14:52:40 IST",
+          "kind": "state",
+          "label": "State",
+          "text": "s2a_verify_name"
+        },
+        {
+          "ts": "2026-04-28 14:52:40 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "Could you please help me with your full name?"
+        },
+        {
+          "ts": "2026-04-28 14:52:41 IST",
+          "kind": "system",
+          "label": "Context",
+          "text": "Captured context snapshot at state s2a_verify_name"
+        }
+      ]
+    },
+    {
+      "key": "scenario-3",
+      "title": "Reference Number Provided Inline",
+      "description": "User replies to the greeting with a fully labeled reference number in the same utterance.",
+      "from_number": "9998885555",
+      "expected": [
+        "Greeting should not proactively mention reference number.",
+        "The direct labeled reference number should be used immediately without asking for it again.",
+        "Lookup should use reference_number=70360256 and resolve KELSEY HOWE.",
+        "Call should leave s1 and land in s2a_verify_name."
+      ],
+      "status": "complete",
+      "verdict": "pass",
+      "call_id": "call_simulation_dd6a46a",
+      "starting_state": "s1_verify_consumer",
+      "current_state": "s2a_verify_name",
+      "first_message": "Hi. Thanks for calling American Express. I'm your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I'm having trouble pulling up your information using the number that you're calling from. May I please have the phone number that you have on file with us?",
+      "checks": [
+        {
+          "name": "Greeting stays on phone lookup",
+          "passed": true,
+          "expected": "Greeting should ask for phone number and not proactively mention reference number.",
+          "actual": "Hi. Thanks for calling American Express. I'm your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I'm having trouble pulling up your information using the number that you're calling from. May I please have the phone number that you have on file with us?"
+        },
+        {
+          "name": "Directly provided reference number is used immediately",
+          "passed": true,
+          "expected": "When the first user utterance already includes the reference number, the agent should not ask for it again.",
+          "actual": "Thank you.\nLet me look that up for you. <break time=\"500ms\" /> | Could you please help me with your full name?"
+        },
+        {
+          "name": "Direct lookup uses reference_number parameter",
+          "passed": true,
+          "expected": "The direct labeled utterance should trigger get_details_from_contact with reference_number=70360256.",
+          "actual": "{'name': 'get_details_from_contact', 'arguments': {'reference_number': '70360256'}, 'result': {'user_details': {'consumer_id': '70360256', 'first_name': 'KELSEY', 'last_name': 'HOWE', 'emails': ['Ethan.Shannon@na.firstsource.com'], 'ssn': '0613', 'dob': '1992', 'zipcode': '97405', 'address': '285 E 37TH AVE', 'city': 'EUGENE', 'state': 'OR'}, 'account_details': [{'account_id': '70360256', 'consumer_id': '70360256', 'debt_amount': '500.0', 'status': 'ACT', 'additional_fields': {'apollo_eligible': False, 'oasis_eligible': True, 'non_digital': False, 'ud_status': False, 'oos_status': False, 'is_po_box': False, 'card_type': 'OP', 'oasis_limit': '500.00', 'card_open_date': '2018-08-17', 'min_settlement_pct': '30', 'max_post_charge_months': '36', 'max_payment_start_date': '30', 'card_type_name': 'CASH MAGNET'}}]}}"
+        },
+        {
+          "name": "Correct consumer was loaded",
+          "passed": true,
+          "expected": "The loaded user_details.consumer_id should be 70360256.",
+          "actual": "70360256"
+        },
+        {
+          "name": "Lookup exits s1 into name verification",
+          "passed": true,
+          "expected": "After successful lookup, the call should move into s2a_verify_name.",
+          "actual": "s2a_verify_name"
+        }
+      ],
+      "error": null,
+      "timeline": [
+        {
+          "ts": "2026-04-28 14:52:19 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "Hi. Thanks for calling American Express. I'm your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I'm having trouble pulling up your information using the number that you're calling from. May I please have the phone number that you have on file with us?"
+        },
+        {
+          "ts": "2026-04-28 14:52:19 IST",
+          "kind": "user",
+          "label": "User",
+          "text": "My reference number is 70360256"
+        },
+        {
+          "ts": "2026-04-28 14:52:23 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "Thank you.\nLet me look that up for you. <break time=\"500ms\" />"
+        },
+        {
+          "ts": "2026-04-28 14:52:28 IST",
+          "kind": "tool",
+          "label": "Tool",
+          "text": "get_details_from_contact args={\"reference_number\": \"70360256\"} result=consumer_id=70360256, name=KELSEY HOWE"
+        },
+        {
+          "ts": "2026-04-28 14:52:28 IST",
+          "kind": "tool",
+          "label": "Tool",
+          "text": "transition_to_s2a_verify_name args={\"lookup_method\": \"reference_number\"} result=Transitioned to \"s2a_verify_name\" state"
+        },
+        {
+          "ts": "2026-04-28 14:52:28 IST",
+          "kind": "state",
+          "label": "State",
+          "text": "s2a_verify_name"
+        },
+        {
+          "ts": "2026-04-28 14:52:28 IST",
+          "kind": "assistant",
+          "label": "Assistant",
+          "text": "Could you please help me with your full name?"
+        },
+        {
+          "ts": "2026-04-28 14:52:29 IST",
+          "kind": "system",
+          "label": "Context",
+          "text": "Captured context snapshot at state s2a_verify_name"
+        }
+      ]
+    }
+  ]
+}

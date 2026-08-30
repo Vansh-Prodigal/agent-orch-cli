@@ -1,0 +1,210 @@
+{
+  "to_number": "7066226252",
+  "starting_state": "s1_verify_consumer",
+  "current_state": "s1_verify_consumer",
+  "call_id": "call_simulation_66d1c12",
+  "transcript": [
+    {
+      "role": "assistant",
+      "content": "Hi. Thanks for calling American Express. I'm your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I'm having trouble pulling up your information using the number that you're calling from. May I please have the phone number that you have on file with us?"
+    },
+    {
+      "role": "user",
+      "content": "Sure, it's seven zero six, six two two, six two five two."
+    },
+    {
+      "role": "assistant",
+      "content": "Thank you.\nLet me look that up for you. <break time=\"500ms\" />\n"
+    },
+    {
+      "role": "assistant",
+      "created_at": 1777551949271,
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "toolu_vrtx_016ewFvZARq9sA45gEeG8Fd2",
+          "type": "function",
+          "function": {
+            "name": "get_details_from_contact",
+            "arguments": "{\"phone\": \"7066226252\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_vrtx_016ewFvZARq9sA45gEeG8Fd2",
+      "content": "{\"message\": \"No consumers found for the given search criteria\"}",
+      "created_at": 1777551950304
+    },
+    {
+      "role": "assistant",
+      "content": "I wasn't able to find any information with the phone number seven zero six <break time=\"0.25s\" /> six two two <break time=\"0.25s\" /> six two five two. Was that the correct number?"
+    },
+    {
+      "role": "user",
+      "content": "Yes that's the right number. Maybe try looking me up by name? My name is Kelsey Howe."
+    },
+    {
+      "role": "assistant",
+      "content": "I appreciate that, but I'm unable to look you up by name. I can try looking you up with your Social Security number. May I have your full Social Security number?"
+    },
+    {
+      "role": "user",
+      "content": "I'm not comfortable sharing my full SSN, but I can give you the last four. It's zero six one three."
+    },
+    {
+      "role": "assistant",
+      "content": "I understand your concern, but I do need the full Social Security number to look up your information. The last four digits alone won't allow me to access your records. Would you be comfortable providing the full nine digit Social Security number?"
+    },
+    {
+      "role": "user",
+      "content": "I'd really rather not share my full SSN over the phone. Could you try my zip code instead? It's nine seven four zero five."
+    },
+    {
+      "role": "assistant",
+      "content": "I understand your hesitation, but unfortunately I'm not able to look you up using a zip code. The full Social Security number is the only other option I have available to locate your information. \n\nIf you're not comfortable providing that, I can connect you with a live agent who may have access to additional records that could help. Would you prefer I connect you with one?"
+    },
+    {
+      "role": "user",
+      "content": "Okay, fine. My full social is five three two, four six, zero six one three."
+    },
+    {
+      "role": "assistant",
+      "content": "Thank you.\nLet me look that up for you. <break time=\"500ms\" />\n"
+    },
+    {
+      "role": "assistant",
+      "created_at": 1777552008811,
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "toolu_vrtx_01C6qAqWkJCwjemPeM8dSXRV",
+          "type": "function",
+          "function": {
+            "name": "get_details_from_contact",
+            "arguments": "{\"ssn\": \"532460613\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_vrtx_01C6qAqWkJCwjemPeM8dSXRV",
+      "content": "{\"message\": \"No consumers found for the given search criteria\"}",
+      "created_at": 1777552009654
+    },
+    {
+      "role": "assistant",
+      "content": "I wasn't able to find any information with the Social Security number five three two <break time=\"0.25s\" /> four six <break time=\"0.25s\" /> zero six one three. Was that the correct number?"
+    },
+    {
+      "role": "user",
+      "content": "Hmm, let me double-check. Actually, can you try the phone number again? It might have been entered wrong. Seven zero six, six two two, six two five two."
+    },
+    {
+      "role": "assistant",
+      "content": "I understand, but I've already confirmed that phone number with you and it didn't return any results. Since both the phone number and Social Security number you've provided haven't located your information, I apologize, but I haven't been able to locate your information with what I have available. A live agent may have access to additional records that could help. Would you prefer I connect you with one?"
+    },
+    {
+      "role": "user",
+      "content": "Let me try one more time. My SSN is one two three, four five, zero six one three."
+    },
+    {
+      "role": "assistant",
+      "content": "Thank you.\nLet me look that up for you. <break time=\"500ms\" />\n"
+    },
+    {
+      "role": "assistant",
+      "created_at": 1777552042955,
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "toolu_vrtx_01XfAByYfSzrPEAqrUoPXuFn",
+          "type": "function",
+          "function": {
+            "name": "get_details_from_contact",
+            "arguments": "{\"ssn\": \"123450613\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_vrtx_01XfAByYfSzrPEAqrUoPXuFn",
+      "content": "{\"message\": \"No consumers found for the given search criteria\"}",
+      "created_at": 1777552043749
+    },
+    {
+      "role": "assistant",
+      "content": "I wasn't able to find any information with the Social Security number one two three <break time=\"0.25s\" /> four five <break time=\"0.25s\" /> zero six one three. Was that the correct number?"
+    },
+    {
+      "role": "user",
+      "content": "Wait, sorry, let me check my records. My SSN is two seven zero, eight one, zero six one three."
+    },
+    {
+      "role": "assistant",
+      "content": "Thank you.\nLet me look that up for you. <break time=\"500ms\" />\n"
+    },
+    {
+      "role": "assistant",
+      "created_at": 1777552104025,
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "toolu_vrtx_01Q4tEQrNmW2862jHzFyocN2",
+          "type": "function",
+          "function": {
+            "name": "get_details_from_contact",
+            "arguments": "{\"ssn\": \"270810613\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_vrtx_01Q4tEQrNmW2862jHzFyocN2",
+      "content": "{\"message\": \"No consumers found for the given search criteria\"}",
+      "created_at": 1777552104833
+    },
+    {
+      "role": "assistant",
+      "content": "I wasn't able to find any information with the Social Security number two seven zero <break time=\"0.25s\" /> eight one <break time=\"0.25s\" /> zero six one three. Was that the correct number?"
+    },
+    {
+      "role": "user",
+      "content": "I don't have my SSN handy and I'm not comfortable guessing. I'll call back from a different line later. Thank you."
+    },
+    {
+      "role": "assistant",
+      "content": "I completely understand. Feel free to call back anytime, and we'll be happy to help you. Thanks for calling in today."
+    },
+    {
+      "role": "assistant",
+      "created_at": 1777552123520,
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "toolu_vrtx_011sszQi5fUcpT3CNrmP3fmY",
+          "type": "function",
+          "function": {
+            "name": "end_the_call",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_vrtx_011sszQi5fUcpT3CNrmP3fmY",
+      "content": "Error running tool.",
+      "created_at": 1777552123524
+    },
+    {
+      "role": "assistant",
+      "content": "I completely understand. Feel free to call back anytime, and we'll be happy to help you. Thanks for calling in today."
+    }
+  ],
+  "label": "subagent_1_three_parts"
+}

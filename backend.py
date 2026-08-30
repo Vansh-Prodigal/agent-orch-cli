@@ -1509,7 +1509,9 @@ def _get_dynamic_prompt_info() -> Tuple[Optional[int], Optional[str]]:
                 dp = getattr(s, "dynamic_prompting", None)
                 if dp:
                     dynamic_prompting = [
-                        d if isinstance(d, dict) else (d.model_dump() if hasattr(d, "model_dump") else d)
+                        d
+                        if isinstance(d, dict)
+                        else (d.model_dump() if hasattr(d, "model_dump") else d)
                         for d in dp
                     ]
                 break

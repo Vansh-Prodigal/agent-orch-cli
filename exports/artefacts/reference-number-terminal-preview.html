@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProAgent Split Terminal Preview</title>
+  <style>
+    :root {
+      --bg: #07090d;
+      --bg-elevated: #0d1118;
+      --panel: #0f141d;
+      --panel-2: #121823;
+      --grid: rgba(255, 255, 255, 0.035);
+      --primary: #3291ff;
+      --success: #62c073;
+      --warning: #f5a623;
+      --error: #ff6066;
+      --info: #51a8ff;
+      --accent: #be79f0;
+      --builtin: #d4a3ff;
+      --muted: #888888;
+      --emphasis: #ededed;
+      --border: #333333;
+      --shell: #0a0f16;
+      --shadow: rgba(0, 0, 0, 0.35);
+      --radius: 16px;
+      --status-height: 38px;
+      --hint-height: 22px;
+      --input-height: 40px;
+      --pane-font: 11px;
+      --pane-font-small: 10px;
+      --pane-font-body: 11px;
+      --pane-cols: 2;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background:
+        linear-gradient(180deg, rgba(50, 145, 255, 0.05), transparent 22%),
+        radial-gradient(circle at top right, rgba(190, 121, 240, 0.08), transparent 28%),
+        var(--bg);
+      color: var(--emphasis);
+      font-family:
+        ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.35));
+    }
+
+    .app {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .toolbar {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 1.6fr auto auto auto;
+      gap: 14px;
+      align-items: center;
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      background:
+        linear-gradient(180deg, rgba(18, 24, 35, 0.96), rgba(13, 17, 24, 0.9));
+      backdrop-filter: blur(16px);
+    }
+
+    .brand {
+      min-width: 0;
+    }
+
+    .eyebrow {
+      color: var(--primary);
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .title {
+      font-size: clamp(18px, 2.2vw, 28px);
+      line-height: 1.05;
+      margin: 0 0 6px;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: #b4bccb;
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 72ch;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .controls label {
+      color: #b8c1d1;
+    }
+
+    .controls select,
+    .controls button {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: var(--shell);
+      color: var(--emphasis);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .controls button:hover,
+    .controls select:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .meta {
+      justify-self: end;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border-radius: 999px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+      color: #c7cfdd;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .pill strong {
+      color: var(--emphasis);
+      font-weight: 600;
+    }
+
+    .viewport {
+      padding: 18px 22px 22px;
+      overflow: auto;
+    }
+
+    .pane-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(var(--pane-cols), minmax(0, 1fr));
+      min-height: 100%;
+    }
+
+    .pane {
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      min-height: clamp(290px, 34vh, 500px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 18%),
+        linear-gradient(180deg, rgba(13, 17, 24, 0.98), rgba(9, 13, 18, 0.98));
+      box-shadow:
+        0 18px 60px var(--shadow),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .pane-shell {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      background: linear-gradient(180deg, rgba(15, 20, 29, 0.92), rgba(9, 13, 18, 0.92));
+      color: #b8c1d1;
+      font-size: var(--pane-font-small);
+    }
+
+    .shell-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .traffic {
+      display: inline-flex;
+      gap: 5px;
+    }
+
+    .traffic span {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+
+    .traffic span:nth-child(1) { background: #ff5f57; }
+    .traffic span:nth-child(2) { background: #febc2e; }
+    .traffic span:nth-child(3) { background: #28c840; }
+
+    .scenario-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #e2e8f6;
+    }
+
+    .scenario-meta {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .tiny-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .tiny-badge.pass {
+      color: var(--success);
+      border-color: rgba(98, 192, 115, 0.28);
+    }
+
+    .tiny-badge.fail {
+      color: var(--error);
+      border-color: rgba(255, 96, 102, 0.28);
+    }
+
+    .tiny-badge.running {
+      color: var(--accent);
+      border-color: rgba(190, 121, 240, 0.28);
+    }
+
+    .tiny-badge.pending {
+      color: var(--warning);
+      border-color: rgba(245, 166, 35, 0.28);
+    }
+
+    .status-bar {
+      margin: 10px 10px 0;
+      min-height: var(--status-height);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.02);
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: var(--pane-font-small);
+    }
+
+    .status-bar.running {
+      border-color: rgba(190, 121, 240, 0.55);
+    }
+
+    .status-bar.pass {
+      border-color: rgba(98, 192, 115, 0.55);
+    }
+
+    .status-bar.fail {
+      border-color: rgba(255, 96, 102, 0.55);
+    }
+
+    .status-brand {
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .status-state {
+      color: var(--warning);
+      font-weight: 700;
+    }
+
+    .status-stream {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .messages {
+      min-height: 0;
+      overflow: auto;
+      padding: 10px 12px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .message {
+      display: grid;
+      gap: 3px;
+    }
+
+    .message-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: var(--pane-font);
+      font-weight: 700;
+    }
+
+    .message-header.assistant { color: var(--primary); }
+    .message-header.user { color: var(--success); }
+    .message-header.system { color: var(--warning); }
+    .message-header.tool { color: var(--accent); }
+    .message-header.state { color: var(--builtin); }
+    .message-header.error { color: var(--error); }
+
+    .message-body {
+      margin-left: 18px;
+      color: #d9e0ec;
+      line-height: 1.42;
+      font-size: var(--pane-font-body);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .tool-card {
+      margin-left: 18px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(190, 121, 240, 0.38);
+      background: rgba(190, 121, 240, 0.07);
+      color: #dcc4f3;
+      line-height: 1.35;
+      font-size: var(--pane-font-body);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .empty-state {
+      height: 100%;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 24px;
+    }
+
+    .input-bar {
+      min-height: var(--input-height);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent);
+      color: var(--muted);
+      font-size: var(--pane-font);
+    }
+
+    .prompt {
+      color: var(--success);
+      font-weight: 700;
+    }
+
+    .input-value {
+      color: #9fa8ba;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .hint-bar {
+      min-height: var(--hint-height);
+      padding: 0 12px 10px;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.35;
+      opacity: 0.9;
+    }
+
+    .hint-bar strong {
+      color: #ced6e4;
+      font-weight: 600;
+    }
+
+    @media (max-width: 1200px) {
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .meta {
+        justify-self: start;
+        justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .viewport {
+        padding: 14px;
+      }
+
+      .pane-grid {
+        grid-template-columns: 1fr !important;
+      }
+
+      .pane {
+        min-height: 72vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="toolbar">
+      <div class="brand">
+        <div class="eyebrow">Live HTML Preview</div>
+        <h1 class="title">Ink-style split terminal wall</h1>
+        <p class="subtitle">
+          A browser preview that mirrors the CLI's status bar, message bubbles,
+          tool call cards, input bar, and terminal rhythm. It reads the live
+          scenario JSON and tiles any number of panes to fit the viewport.
+        </p>
+      </div>
+      <div class="controls">
+        <label for="pane-count">Panes</label>
+        <select id="pane-count">
+          <option value="auto" selected>Auto</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="6">6</option>
+          <option value="9">9</option>
+        </select>
+      </div>
+      <div class="controls">
+        <label for="data-url">Source</label>
+        <select id="data-url">
+          <option value="reference-number-live-data.json" selected>reference-number-live-data.json</option>
+        </select>
+      </div>
+      <div class="meta" id="meta"></div>
+    </header>
+    <main class="viewport">
+      <section class="pane-grid" id="pane-grid"></section>
+    </main>
+  </div>
+
+  <script>
+    const theme = {
+      primary: "#3291ff",
+      success: "#62c073",
+      warning: "#f5a623",
+      error: "#ff6066",
+      info: "#51a8ff",
+      accent: "#be79f0",
+      builtin: "#d4a3ff",
+      muted: "#888888",
+      emphasis: "#ededed",
+      border: "#333333",
+    };
+
+    const glyph = {
+      diamond: "◆",
+      diamondD: "◈",
+      arrow: "▸",
+      bullet: "●",
+      bulletO: "○",
+      prompt: "❯",
+      sep: "│",
+      gear: "⟐",
+      check: "✓",
+      cross: "✗",
+      dot: "·",
+      star: "✦",
+      cursor: "▋",
+    };
+
+    const state = {
+      data: null,
+      paneCount: "auto",
+      url: "reference-number-live-data.json",
+    };
+
+    const paneGrid = document.getElementById("pane-grid");
+    const meta = document.getElementById("meta");
+    const paneCountSelect = document.getElementById("pane-count");
+    const dataUrlSelect = document.getElementById("data-url");
+
+    paneCountSelect.addEventListener("change", () => {
+      state.paneCount = paneCountSelect.value;
+      render();
+    });
+
+    dataUrlSelect.addEventListener("change", () => {
+      state.url = dataUrlSelect.value;
+      loadData();
+    });
+
+    window.addEventListener("resize", render);
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    function formatTime(value) {
+      return value || "live";
+    }
+
+    function normalizePanes(data, previewCount) {
+      const scenarios = Array.isArray(data?.scenarios) ? data.scenarios : [];
+      if (previewCount === "auto") {
+        return scenarios;
+      }
+
+      const target = Number(previewCount) || scenarios.length || 1;
+      const panes = scenarios.slice(0, target);
+
+      while (panes.length < target) {
+        panes.push({
+          key: `placeholder-${panes.length + 1}`,
+          title: `Standby Pane ${panes.length + 1}`,
+          description: "Reserved for an additional scenario stream.",
+          status: "queued",
+          verdict: "pending",
+          call_id: null,
+          current_state: "waiting",
+          timeline: [],
+          checks: [],
+        });
+      }
+
+      return panes;
+    }
+
+    function chooseColumns(count) {
+      if (count <= 1) return 1;
+
+      const width = window.innerWidth - 60;
+      const height = window.innerHeight - 160;
+
+      if (count === 2 && width >= 1100) return 2;
+      if (count === 3 && width >= 1320) return 3;
+      if (count === 4 && width >= 1540) return 4;
+
+      let bestCols = 1;
+      let bestScore = Infinity;
+
+      for (let cols = 1; cols <= count; cols += 1) {
+        const rows = Math.ceil(count / cols);
+        const paneWidth = width / cols;
+        const paneHeight = height / rows;
+        const ratio = paneWidth / Math.max(paneHeight, 1);
+        const score =
+          Math.abs(Math.log(ratio / 1.45)) +
+          Math.abs(cols - rows) * 0.08 +
+          (cols > 4 ? 0.35 : 0);
+
+        if (score < bestScore) {
+          bestScore = score;
+          bestCols = cols;
+        }
+      }
+
+      return bestCols;
+    }
+
+    function verdictClass(item) {
+      if (item.status === "running") return "running";
+      if (item.verdict === "pass") return "pass";
+      if (item.verdict === "fail") return "fail";
+      return "pending";
+    }
+
+    function statusClass(item) {
+      if (item.status === "running") return "running";
+      if (item.verdict === "pass") return "pass";
+      if (item.verdict === "fail") return "fail";
+      return "";
+    }
+
+    function statusLabel(item) {
+      if (item.status === "running") return `${glyph.gear} streaming`;
+      if (item.verdict === "pass") return `${glyph.check} pass`;
+      if (item.verdict === "fail") return `${glyph.cross} fail`;
+      return `${glyph.dot} queued`;
+    }
+
+    function timelineEntryHtml(entry) {
+      const kind = entry.kind || "system";
+      const cls =
+        kind === "assistant" ? "assistant" :
+        kind === "user" ? "user" :
+        kind === "tool" ? "tool" :
+        kind === "state" ? "state" :
+        kind === "error" ? "error" : "system";
+
+      const label =
+        kind === "assistant" ? `${glyph.diamond} Assistant` :
+        kind === "user" ? `${glyph.bullet} You` :
+        kind === "tool" ? `${glyph.star} Tool` :
+        kind === "state" ? `${glyph.arrow} State` :
+        kind === "error" ? `${glyph.cross} Error` :
+        `${glyph.arrow} System`;
+
+      if (kind === "tool") {
+        return `
+          <div class="message">
+            <div class="message-header ${cls}">
+              <span>${label}</span>
+              <span style="color: var(--muted); font-weight: 400;">${escapeHtml(formatTime(entry.ts))}</span>
+            </div>
+            <div class="tool-card">${escapeHtml(entry.text)}</div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="message">
+          <div class="message-header ${cls}">
+            <span>${label}</span>
+            <span style="color: var(--muted); font-weight: 400;">${escapeHtml(formatTime(entry.ts))}</span>
+          </div>
+          <div class="message-body">${escapeHtml(entry.text)}</div>
+        </div>
+      `;
+    }
+
+    function lastUserInput(item) {
+      const timeline = item.timeline || [];
+      const reversed = [...timeline].reverse();
+      const match = reversed.find((entry) => entry.kind === "user");
+      return match ? match.text : "Type a message...";
+    }
+
+    function paneHtml(item, index) {
+      const timeline = (item.timeline || []).slice(-12);
+      const isPlaceholder = !timeline.length && !item.call_id;
+      const checksPassed = Array.isArray(item.checks)
+        ? item.checks.filter((check) => check.passed).length
+        : 0;
+      const checksTotal = Array.isArray(item.checks) ? item.checks.length : 0;
+      const shellVerdict = verdictClass(item);
+
+      const content = isPlaceholder
+        ? `
+            <div class="empty-state">
+              <div>
+                <div style="color: var(--primary); margin-bottom: 8px;">${glyph.diamondD} PROAGENT</div>
+                <div>Pane reserved for another live stream.</div>
+                <div style="margin-top: 8px; color: #b4bccb;">Open one more subagent-run scenario and it will appear here.</div>
+              </div>
+            </div>
+          `
+        : timeline.map(timelineEntryHtml).join("");
+
+      return `
+        <article class="pane">
+          <div class="pane-shell">
+            <div class="shell-title">
+              <span class="traffic"><span></span><span></span><span></span></span>
+              <span class="scenario-title">${escapeHtml(item.title || `Pane ${index + 1}`)}</span>
+            </div>
+            <div class="scenario-meta">
+              <span class="tiny-badge ${shellVerdict}">${escapeHtml(item.status === "running" ? "running" : item.verdict || "pending")}</span>
+              <span class="tiny-badge">${glyph.dot} ${checksPassed}/${checksTotal} checks</span>
+            </div>
+          </div>
+          <div class="status-bar ${statusClass(item)}">
+            <span class="status-brand">${glyph.diamondD} PROAGENT</span>
+            <span style="color: var(--border);">${glyph.sep}</span>
+            <span class="status-state">${glyph.arrow} ${escapeHtml(item.current_state || item.starting_state || "waiting")}</span>
+            <span style="color: var(--border);">${glyph.sep}</span>
+            <span>call ${glyph.dot} ${escapeHtml(item.call_id || "preview")}</span>
+            <span style="color: var(--border);">${glyph.sep}</span>
+            <span>cfg ${glyph.dot} remote</span>
+            <span style="color: var(--border);">${glyph.sep}</span>
+            <span class="status-stream">${escapeHtml(statusLabel(item))}</span>
+          </div>
+          <div class="messages">${content}</div>
+          <div class="input-bar">
+            <span class="prompt">${glyph.prompt}</span>
+            <span class="input-value">${escapeHtml(lastUserInput(item))}</span>
+          </div>
+          <div class="hint-bar">
+            ${glyph.bulletO} <strong>^E</strong> export ${glyph.dot} <strong>^L</strong> logs ${glyph.dot}
+            <strong>^R</strong> rewind ${glyph.dot} <strong>^X</strong> context ${glyph.dot}
+            <strong>^P</strong> prompt ${glyph.dot} <strong>^C</strong> exit
+          </div>
+        </article>
+      `;
+    }
+
+    function renderMeta(data, panes) {
+      const summary = data?.summary || {};
+      meta.innerHTML = `
+        <span class="pill"><strong>Status</strong> ${escapeHtml(data?.status || "idle")}</span>
+        <span class="pill"><strong>Panes</strong> ${panes.length}</span>
+        <span class="pill"><strong>Passed</strong> ${escapeHtml(`${summary.passed_scenarios || 0}/${summary.scenario_count || panes.length || 0}`)}</span>
+        <span class="pill"><strong>Updated</strong> ${escapeHtml(data?.updated_at || "waiting")}</span>
+      `;
+    }
+
+    function render() {
+      const panes = normalizePanes(state.data, state.paneCount);
+      const cols = chooseColumns(Math.max(panes.length, 1));
+      document.documentElement.style.setProperty("--pane-cols", String(cols));
+      renderMeta(state.data, panes);
+      paneGrid.innerHTML = panes.map(paneHtml).join("");
+    }
+
+    async function loadData() {
+      try {
+        const response = await fetch(`${state.url}?t=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        state.data = await response.json();
+      } catch (error) {
+        state.data = {
+          status: "unavailable",
+          updated_at: "no live JSON",
+          summary: { passed_scenarios: 0, scenario_count: 0 },
+          scenarios: [],
+        };
+      }
+      render();
+    }
+
+    loadData();
+    setInterval(loadData, 1500);
+  </script>
+</body>
+</html>

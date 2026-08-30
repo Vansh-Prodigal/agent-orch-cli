@@ -1,0 +1,214 @@
+{
+  "to_number": "7066226252",
+  "starting_state": "s1_verify_consumer",
+  "current_state": "s1_verify_consumer",
+  "call_id": "call_simulation_1b49e99",
+  "transcript": [
+    {
+      "role": "assistant",
+      "content": "Hi. Thanks for calling American Express. I'm your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I'm having trouble pulling up your information using the number that you're calling from. May I please have the phone number that you have on file with us?"
+    },
+    {
+      "role": "user",
+      "content": "Hi, sure — it's 706-622-6252."
+    },
+    {
+      "role": "assistant",
+      "content": "Thank you.\nLet me look that up for you. <break time=\"500ms\" />\n"
+    },
+    {
+      "role": "assistant",
+      "created_at": 1777551956862,
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "toolu_vrtx_01KvaguyHHa5vY8KQJhYdRrn",
+          "type": "function",
+          "function": {
+            "name": "get_details_from_contact",
+            "arguments": "{\"phone\": \"7066226252\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_vrtx_01KvaguyHHa5vY8KQJhYdRrn",
+      "content": "{\"message\": \"No consumers found for the given search criteria\"}",
+      "created_at": 1777551958756
+    },
+    {
+      "role": "assistant",
+      "content": "I wasn't able to find any information with the phone number seven oh six <break time=\"0.25s\" /> six two two <break time=\"0.25s\" /> six two five two. Was that the correct number?"
+    },
+    {
+      "role": "user",
+      "content": "Yes, that's the right number. Maybe you can look me up by name? It's Kelsey Howe."
+    },
+    {
+      "role": "assistant",
+      "content": "I appreciate that, but I'm unable to look you up by name. I can try looking you up with your Social Security number. May I have your full Social Security number?"
+    },
+    {
+      "role": "user",
+      "content": "I'm sorry, I don't have my full Social Security number handy. I can give you the last four — it's 0613."
+    },
+    {
+      "role": "assistant",
+      "content": "I understand, but I do need the full Social Security number to look you up. If you're not able to provide that right now, I can connect you with a live agent who may have access to additional records that could help. Would you prefer I connect you with one?"
+    },
+    {
+      "role": "user",
+      "content": "Wait, before transferring — could you try my date of birth or my zip code? My zip is 97405 and I was born in 1992."
+    },
+    {
+      "role": "assistant",
+      "content": "I appreciate you providing that information, but I'm unable to look you up using a zip code or date of birth. The options I have available are a phone number or your full Social Security number. Since we've tried the phone number and you don't have your full Social Security number available right now, a live agent may have access to additional records that could help. Would you like me to connect you with one?"
+    },
+    {
+      "role": "user",
+      "content": "Oh wait, I think I have it — it's 123-45-0613."
+    },
+    {
+      "role": "assistant",
+      "content": "Thank you.\nLet me look that up for you. <break time=\"500ms\" />\n"
+    },
+    {
+      "role": "assistant",
+      "created_at": 1777552025557,
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "toolu_vrtx_01JA11gmH8DczyGvY8uxgD4a",
+          "type": "function",
+          "function": {
+            "name": "get_details_from_contact",
+            "arguments": "{\"ssn\": \"123450613\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_vrtx_01JA11gmH8DczyGvY8uxgD4a",
+      "content": "{\"message\": \"No consumers found for the given search criteria\"}",
+      "created_at": 1777552026367
+    },
+    {
+      "role": "assistant",
+      "content": "I wasn't able to find any information with the Social Security number one two three <break time=\"0.25s\" /> four five <break time=\"0.25s\" /> zero six one three. Was that the correct number?"
+    },
+    {
+      "role": "user",
+      "content": "Hmm let me check again — sorry I'm not great with numbers. Try 706-622-6252 once more for the phone, that's definitely my number."
+    },
+    {
+      "role": "assistant",
+      "content": "I understand, but we've already confirmed that seven oh six <break time=\"0.25s\" /> six two two <break time=\"0.25s\" /> six two five two was correct and I wasn't able to locate your information with it. Since we've tried both the phone number and Social Security number, a live agent may have access to additional records that could help. Would you like me to connect you with one?"
+    },
+    {
+      "role": "user",
+      "content": "Wait, sorry, I had the wrong number written down. Let me try my Social again — it's 444-22-0613."
+    },
+    {
+      "role": "assistant",
+      "content": "Thank you.\nLet me look that up for you. <break time=\"500ms\" />\n"
+    },
+    {
+      "role": "assistant",
+      "created_at": 1777552073771,
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "toolu_vrtx_019t5dgMaRKeEymBtqLp6d9Q",
+          "type": "function",
+          "function": {
+            "name": "get_details_from_contact",
+            "arguments": "{\"ssn\": \"444220613\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_vrtx_019t5dgMaRKeEymBtqLp6d9Q",
+      "content": "{\"message\": \"No consumers found for the given search criteria\"}",
+      "created_at": 1777552074618
+    },
+    {
+      "role": "assistant",
+      "content": "I wasn't able to find any information with the Social Security number four four four <break time=\"0.25s\" /> two two <break time=\"0.25s\" /> zero six one three. Was that the correct number?"
+    },
+    {
+      "role": "user",
+      "content": "Okay let me try one more time — my SSN is 999-99-0613."
+    },
+    {
+      "role": "assistant",
+      "content": "Thank you.\nLet me look that up for you. <break time=\"500ms\" />\n"
+    },
+    {
+      "role": "assistant",
+      "created_at": 1777552088573,
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "toolu_vrtx_01VYFLBeDZrTAXfeUGh4pC4t",
+          "type": "function",
+          "function": {
+            "name": "get_details_from_contact",
+            "arguments": "{\"ssn\": \"999990613\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_vrtx_01VYFLBeDZrTAXfeUGh4pC4t",
+      "content": "{\"message\": \"No consumers found for the given search criteria\"}",
+      "created_at": 1777552089387
+    },
+    {
+      "role": "assistant",
+      "content": "I wasn't able to find any information with the Social Security number nine nine nine <break time=\"0.25s\" /> nine nine <break time=\"0.25s\" /> zero six one three. Was that the correct number?"
+    },
+    {
+      "role": "user",
+      "content": "Yes, that was my correct number. I think there might be some issue on your end. Could we try something else?"
+    },
+    {
+      "role": "assistant",
+      "content": "I apologize, but I haven't been able to locate your information with what I have available. A live agent may have access to additional records that could help. Would you prefer I connect you with one?"
+    },
+    {
+      "role": "user",
+      "content": "Yes, please connect me with a live agent. Thank you."
+    },
+    {
+      "role": "assistant",
+      "content": "I understand. Let me connect you with a live agent who can assist you further. Please hold for just a moment while I transfer your call."
+    },
+    {
+      "role": "assistant",
+      "created_at": 1777552125713,
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "toolu_vrtx_01VWa9uzY9KfEagFTbgv2HPR",
+          "type": "function",
+          "function": {
+            "name": "transfer_call",
+            "arguments": "{\"verification_status\": \"no\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_vrtx_01VWa9uzY9KfEagFTbgv2HPR",
+      "content": "Call transferred to human agent",
+      "created_at": 1777552125714
+    }
+  ],
+  "label": "subagent_2_two_parts_500_down"
+}

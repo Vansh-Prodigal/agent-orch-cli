@@ -9,3 +9,4 @@ exports/sessions/*
 !exports/**/.gitkeep
 
 __pycache__
+trees

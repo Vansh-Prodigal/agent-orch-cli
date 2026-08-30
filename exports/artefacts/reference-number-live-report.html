@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Reference Number Live Report</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f1115;
+      --panel: #171a21;
+      --border: #2a3040;
+      --text: #e7ebf3;
+      --muted: #a9b2c3;
+      --pass: #1f8f55;
+      --fail: #c24646;
+      --run: #4c7bd9;
+      --queued: #7b8190;
+      --warn: #b8831d;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1, h2, h3, p { margin: 0; }
+    .hero {
+      display: grid;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .hero-card, .scenario {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .stat {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .stat .label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .stat .value {
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .muted {
+      color: var(--muted);
+    }
+    .pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border: 1px solid transparent;
+    }
+    .pill.pass { background: rgba(31,143,85,0.18); color: #8dd4af; border-color: rgba(31,143,85,0.45); }
+    .pill.fail { background: rgba(194,70,70,0.18); color: #f1a3a3; border-color: rgba(194,70,70,0.45); }
+    .pill.running { background: rgba(76,123,217,0.18); color: #a7c0ff; border-color: rgba(76,123,217,0.45); }
+    .pill.queued { background: rgba(123,129,144,0.18); color: #c4c9d4; border-color: rgba(123,129,144,0.45); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+    }
+    .scenario {
+      display: grid;
+      gap: 14px;
+    }
+    .scenario-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    ul {
+      margin: 8px 0 0 18px;
+      padding: 0;
+    }
+    .checks {
+      display: grid;
+      gap: 8px;
+    }
+    .check {
+      border-left: 4px solid var(--border);
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.02);
+    }
+    .check.pass { border-color: var(--pass); }
+    .check.fail { border-color: var(--fail); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th, td {
+      border-top: 1px solid var(--border);
+      vertical-align: top;
+      text-align: left;
+      padding: 8px 6px;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div class="hero-card">
+        <h1>Reference Number Live Report</h1>
+        <p class="muted">Testing the updated s1 behavior for reactive reference-number lookup on <code>7066226252</code>. This page refreshes every second while the run is active.</p>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="label">Runner Status</div><div class="value">complete</div></div>
+        <div class="stat"><div class="label">Passed Scenarios</div><div class="value">3/3</div></div>
+        <div class="stat"><div class="label">Passed Checks</div><div class="value">19/19</div></div>
+        <div class="stat"><div class="label">Reference Number</div><div class="value"><code>70360256</code></div></div>
+      </div>
+      <div class="hero-card">
+        <p><strong>Started:</strong> 2026-04-28 14:52:06 IST</p>
+        <p><strong>Updated:</strong> 2026-04-28 14:52:41 IST</p>
+        <p><strong>Expected success state:</strong> <code>s2a_verify_name</code></p>
+        <p><strong>Expected consumer:</strong> <code>70360256</code> / KELSEY HOWE</p>
+      </div>
+    </section>
+    <section class="grid">
+      
+        <article class="scenario">
+          <div class="scenario-header">
+            <div>
+              <h2>Reference Number Offered First</h2>
+              <p class="muted">User says they have a reference number, then supplies it when asked.</p>
+              <p class="muted"><strong>ANI:</strong> <code>9998887777</code></p>
+            </div>
+            <span class="pill pass">pass</span>
+          </div>
+          <div>
+            <h3>Expected Behavior</h3>
+            <ul><li>Greeting should still ask for phone number and should not proactively mention reference number.</li><li>After the user says they have a reference number, the agent should ask for it.</li><li>Lookup should use reference_number=70360256 and resolve KELSEY HOWE.</li><li>Call should leave s1 and land in s2a_verify_name.</li></ul>
+          </div>
+          <div>
+            <h3>Checks</h3>
+            <div class="checks">
+            <div class="check pass">
+              <div><strong>Greeting stays on phone lookup</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> Greeting should ask for phone number and not proactively mention reference number.</div>
+              <div><strong>Actual:</strong> Hi. Thanks for calling American Express. I&#x27;m your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I&#x27;m having trouble pulling up your information using the number that you&#x27;re calling from. May I please have the phone number that you have on file with us?</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Reactive offer is accepted</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> After the user says they have a reference number, the agent should ask for it.</div>
+              <div><strong>Actual:</strong> Thank you for letting me know. I can look you up using that reference number. What&#x27;s the reference number you have?</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Lookup uses reference_number parameter</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> The successful lookup should call get_details_from_contact with reference_number=70360256.</div>
+              <div><strong>Actual:</strong> {&quot;reference_number&quot;: &quot;70360256&quot;}</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Correct consumer was loaded</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> The loaded user_details.consumer_id should be 70360256.</div>
+              <div><strong>Actual:</strong> 70360256</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Lookup exits s1 into name verification</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> After successful lookup, the call should move into s2a_verify_name.</div>
+              <div><strong>Actual:</strong> s2a_verify_name</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Post-lookup prompt is name verification</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> The next assistant prompt should ask for the consumer&#x27;s full name.</div>
+              <div><strong>Actual:</strong> Could you please help me with your full name?</div>
+            </div>
+            </div>
+          </div>
+          <div>
+            <h3>Run Metadata</h3>
+            <p><strong>Call ID:</strong> <code>call_simulation_342996d</code></p><p><strong>Start state:</strong> <code>s1_verify_consumer</code></p><p><strong>Current state:</strong> <code>s2a_verify_name</code></p>
+          </div>
+          <div>
+            <h3>Timeline</h3>
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Actor</th><th>Content</th></tr>
+              </thead>
+              <tbody>
+            <tr>
+              <td>2026-04-28 14:52:17 IST</td>
+              <td>Assistant</td>
+              <td>Hi. Thanks for calling American Express. I&#x27;m your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I&#x27;m having trouble pulling up your information using the number that you&#x27;re calling from. May I please have the phone number that you have on file with us?</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:17 IST</td>
+              <td>User</td>
+              <td>I have a reference number</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:19 IST</td>
+              <td>Assistant</td>
+              <td>Thank you for letting me know. I can look you up using that reference number. What&#x27;s the reference number you have?</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:19 IST</td>
+              <td>User</td>
+              <td>70360256</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:21 IST</td>
+              <td>Assistant</td>
+              <td>Thank you.<br>Let me look that up for you. &lt;break time=&quot;500ms&quot; /&gt;</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:28 IST</td>
+              <td>Tool</td>
+              <td>get_details_from_contact args={&quot;reference_number&quot;: &quot;70360256&quot;} result=consumer_id=70360256, name=KELSEY HOWE</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:28 IST</td>
+              <td>Tool</td>
+              <td>transition_to_s2a_verify_name args={&quot;lookup_method&quot;: &quot;reference_number&quot;} result=Transitioned to &quot;s2a_verify_name&quot; state</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:28 IST</td>
+              <td>State</td>
+              <td>s2a_verify_name</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:28 IST</td>
+              <td>Assistant</td>
+              <td>Could you please help me with your full name?</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:29 IST</td>
+              <td>Context</td>
+              <td>Captured context snapshot at state s2a_verify_name</td>
+            </tr>
+            </tbody>
+            </table>
+          </div>
+        </article>
+        
+
+        <article class="scenario">
+          <div class="scenario-header">
+            <div>
+              <h2>Bad Phone Then Reference Number</h2>
+              <p class="muted">User gives a wrong phone number, confirms it, gets the SSN offer, then switches to a reference number.</p>
+              <p class="muted"><strong>ANI:</strong> <code>9998886666</code></p>
+            </div>
+            <span class="pill pass">pass</span>
+          </div>
+          <div>
+            <h3>Expected Behavior</h3>
+            <ul><li>Greeting should stay on phone-number collection.</li><li>Wrong phone number should be looked up as phone, then echoed for confirmation.</li><li>After confirmation, the agent should offer SSN without proactively mentioning reference number.</li><li>When the user then volunteers a reference number, the agent should accept it and resolve KELSEY HOWE.</li></ul>
+          </div>
+          <div>
+            <h3>Checks</h3>
+            <div class="checks">
+            <div class="check pass">
+              <div><strong>Greeting stays on phone lookup</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> Greeting should ask for phone number and not proactively mention reference number.</div>
+              <div><strong>Actual:</strong> Hi. Thanks for calling American Express. I&#x27;m your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I&#x27;m having trouble pulling up your information using the number that you&#x27;re calling from. May I please have the phone number that you have on file with us?</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Incorrect phone is treated as phone lookup</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> The first failed lookup should use the phone parameter with 1112223333.</div>
+              <div><strong>Actual:</strong> I wasn&#x27;t able to find any information with the phone number one one one &lt;break time=&quot;0.25s&quot; /&gt; two two two &lt;break time=&quot;0.25s&quot; /&gt; three three three three. Was that the correct number?</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Phone failure triggers confirmation</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> After an empty phone lookup, the agent should echo the number back and ask if it was correct.</div>
+              <div><strong>Actual:</strong> I wasn&#x27;t able to find any information with the phone number one one one &lt;break time=&quot;0.25s&quot; /&gt; two two two &lt;break time=&quot;0.25s&quot; /&gt; three three three three. Was that the correct number?</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Confirmed bad phone leads to SSN offer</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> After the phone is confirmed correct, the agent should offer SSN and still not proactively mention reference number.</div>
+              <div><strong>Actual:</strong> I can also try looking you up with your Social Security number. May I have your full Social Security number?</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Reference number is accepted mid-flow</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> When the user volunteers a reference number after the SSN offer, the agent should ask for it.</div>
+              <div><strong>Actual:</strong> Of course, I can look you up with that. What&#x27;s your reference number?</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Mid-flow lookup uses reference_number parameter</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> The final successful lookup should use reference_number=70360256.</div>
+              <div><strong>Actual:</strong> {&#x27;name&#x27;: &#x27;get_details_from_contact&#x27;, &#x27;arguments&#x27;: {&#x27;reference_number&#x27;: &#x27;70360256&#x27;}, &#x27;result&#x27;: {&#x27;user_details&#x27;: {&#x27;consumer_id&#x27;: &#x27;70360256&#x27;, &#x27;first_name&#x27;: &#x27;KELSEY&#x27;, &#x27;last_name&#x27;: &#x27;HOWE&#x27;, &#x27;emails&#x27;: [&#x27;Ethan.Shannon@na.firstsource.com&#x27;], &#x27;ssn&#x27;: &#x27;0613&#x27;, &#x27;dob&#x27;: &#x27;1992&#x27;, &#x27;zipcode&#x27;: &#x27;97405&#x27;, &#x27;address&#x27;: &#x27;285 E 37TH AVE&#x27;, &#x27;city&#x27;: &#x27;EUGENE&#x27;, &#x27;state&#x27;: &#x27;OR&#x27;}, &#x27;account_details&#x27;: [{&#x27;account_id&#x27;: &#x27;70360256&#x27;, &#x27;consumer_id&#x27;: &#x27;70360256&#x27;, &#x27;debt_amount&#x27;: &#x27;500.0&#x27;, &#x27;status&#x27;: &#x27;ACT&#x27;, &#x27;additional_fields&#x27;: {&#x27;apollo_eligible&#x27;: False, &#x27;oasis_eligible&#x27;: True, &#x27;non_digital&#x27;: False, &#x27;ud_status&#x27;: False, &#x27;oos_status&#x27;: False, &#x27;is_po_box&#x27;: False, &#x27;card_type&#x27;: &#x27;OP&#x27;, &#x27;oasis_limit&#x27;: &#x27;500.00&#x27;, &#x27;card_open_date&#x27;: &#x27;2018-08-17&#x27;, &#x27;min_settlement_pct&#x27;: &#x27;30&#x27;, &#x27;max_post_charge_months&#x27;: &#x27;36&#x27;, &#x27;max_payment_start_date&#x27;: &#x27;30&#x27;, &#x27;card_type_name&#x27;: &#x27;CASH MAGNET&#x27;}}]}}</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Correct consumer was loaded</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> The loaded user_details.consumer_id should be 70360256.</div>
+              <div><strong>Actual:</strong> 70360256</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Lookup exits s1 into name verification</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> After successful lookup, the call should move into s2a_verify_name.</div>
+              <div><strong>Actual:</strong> s2a_verify_name</div>
+            </div>
+            </div>
+          </div>
+          <div>
+            <h3>Run Metadata</h3>
+            <p><strong>Call ID:</strong> <code>call_simulation_d2c8eb1</code></p><p><strong>Start state:</strong> <code>s1_verify_consumer</code></p><p><strong>Current state:</strong> <code>s2a_verify_name</code></p>
+          </div>
+          <div>
+            <h3>Timeline</h3>
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Actor</th><th>Content</th></tr>
+              </thead>
+              <tbody>
+            <tr>
+              <td>2026-04-28 14:52:19 IST</td>
+              <td>Assistant</td>
+              <td>Hi. Thanks for calling American Express. I&#x27;m your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I&#x27;m having trouble pulling up your information using the number that you&#x27;re calling from. May I please have the phone number that you have on file with us?</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:19 IST</td>
+              <td>User</td>
+              <td>1112223333</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:23 IST</td>
+              <td>Assistant</td>
+              <td>Thank you.<br>Let me look that up for you. &lt;break time=&quot;500ms&quot; /&gt;</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:25 IST</td>
+              <td>Tool</td>
+              <td>get_details_from_contact args={&quot;phone&quot;: &quot;1112223333&quot;} result={&quot;message&quot;: &quot;No consumers found for the given search criteria&quot;}</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:27 IST</td>
+              <td>Assistant</td>
+              <td>I wasn&#x27;t able to find any information with the phone number one one one &lt;break time=&quot;0.25s&quot; /&gt; two two two &lt;break time=&quot;0.25s&quot; /&gt; three three three three. Was that the correct number?</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:27 IST</td>
+              <td>User</td>
+              <td>yes</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:29 IST</td>
+              <td>Assistant</td>
+              <td>I can also try looking you up with your Social Security number. May I have your full Social Security number?</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:29 IST</td>
+              <td>User</td>
+              <td>I have a reference number</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:31 IST</td>
+              <td>Assistant</td>
+              <td>Of course, I can look you up with that. What&#x27;s your reference number?</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:31 IST</td>
+              <td>User</td>
+              <td>70360256</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:33 IST</td>
+              <td>Assistant</td>
+              <td>Thank you.<br>Let me look that up for you. &lt;break time=&quot;500ms&quot; /&gt;</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:40 IST</td>
+              <td>Tool</td>
+              <td>get_details_from_contact args={&quot;reference_number&quot;: &quot;70360256&quot;} result=consumer_id=70360256, name=KELSEY HOWE</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:40 IST</td>
+              <td>Tool</td>
+              <td>transition_to_s2a_verify_name args={&quot;lookup_method&quot;: &quot;reference_number&quot;} result=Transitioned to &quot;s2a_verify_name&quot; state</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:40 IST</td>
+              <td>State</td>
+              <td>s2a_verify_name</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:40 IST</td>
+              <td>Assistant</td>
+              <td>Could you please help me with your full name?</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:41 IST</td>
+              <td>Context</td>
+              <td>Captured context snapshot at state s2a_verify_name</td>
+            </tr>
+            </tbody>
+            </table>
+          </div>
+        </article>
+        
+
+        <article class="scenario">
+          <div class="scenario-header">
+            <div>
+              <h2>Reference Number Provided Inline</h2>
+              <p class="muted">User replies to the greeting with a fully labeled reference number in the same utterance.</p>
+              <p class="muted"><strong>ANI:</strong> <code>9998885555</code></p>
+            </div>
+            <span class="pill pass">pass</span>
+          </div>
+          <div>
+            <h3>Expected Behavior</h3>
+            <ul><li>Greeting should not proactively mention reference number.</li><li>The direct labeled reference number should be used immediately without asking for it again.</li><li>Lookup should use reference_number=70360256 and resolve KELSEY HOWE.</li><li>Call should leave s1 and land in s2a_verify_name.</li></ul>
+          </div>
+          <div>
+            <h3>Checks</h3>
+            <div class="checks">
+            <div class="check pass">
+              <div><strong>Greeting stays on phone lookup</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> Greeting should ask for phone number and not proactively mention reference number.</div>
+              <div><strong>Actual:</strong> Hi. Thanks for calling American Express. I&#x27;m your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I&#x27;m having trouble pulling up your information using the number that you&#x27;re calling from. May I please have the phone number that you have on file with us?</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Directly provided reference number is used immediately</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> When the first user utterance already includes the reference number, the agent should not ask for it again.</div>
+              <div><strong>Actual:</strong> Thank you.<br>Let me look that up for you. &lt;break time=&quot;500ms&quot; /&gt; | Could you please help me with your full name?</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Direct lookup uses reference_number parameter</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> The direct labeled utterance should trigger get_details_from_contact with reference_number=70360256.</div>
+              <div><strong>Actual:</strong> {&#x27;name&#x27;: &#x27;get_details_from_contact&#x27;, &#x27;arguments&#x27;: {&#x27;reference_number&#x27;: &#x27;70360256&#x27;}, &#x27;result&#x27;: {&#x27;user_details&#x27;: {&#x27;consumer_id&#x27;: &#x27;70360256&#x27;, &#x27;first_name&#x27;: &#x27;KELSEY&#x27;, &#x27;last_name&#x27;: &#x27;HOWE&#x27;, &#x27;emails&#x27;: [&#x27;Ethan.Shannon@na.firstsource.com&#x27;], &#x27;ssn&#x27;: &#x27;0613&#x27;, &#x27;dob&#x27;: &#x27;1992&#x27;, &#x27;zipcode&#x27;: &#x27;97405&#x27;, &#x27;address&#x27;: &#x27;285 E 37TH AVE&#x27;, &#x27;city&#x27;: &#x27;EUGENE&#x27;, &#x27;state&#x27;: &#x27;OR&#x27;}, &#x27;account_details&#x27;: [{&#x27;account_id&#x27;: &#x27;70360256&#x27;, &#x27;consumer_id&#x27;: &#x27;70360256&#x27;, &#x27;debt_amount&#x27;: &#x27;500.0&#x27;, &#x27;status&#x27;: &#x27;ACT&#x27;, &#x27;additional_fields&#x27;: {&#x27;apollo_eligible&#x27;: False, &#x27;oasis_eligible&#x27;: True, &#x27;non_digital&#x27;: False, &#x27;ud_status&#x27;: False, &#x27;oos_status&#x27;: False, &#x27;is_po_box&#x27;: False, &#x27;card_type&#x27;: &#x27;OP&#x27;, &#x27;oasis_limit&#x27;: &#x27;500.00&#x27;, &#x27;card_open_date&#x27;: &#x27;2018-08-17&#x27;, &#x27;min_settlement_pct&#x27;: &#x27;30&#x27;, &#x27;max_post_charge_months&#x27;: &#x27;36&#x27;, &#x27;max_payment_start_date&#x27;: &#x27;30&#x27;, &#x27;card_type_name&#x27;: &#x27;CASH MAGNET&#x27;}}]}}</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Correct consumer was loaded</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> The loaded user_details.consumer_id should be 70360256.</div>
+              <div><strong>Actual:</strong> 70360256</div>
+            </div>
+            
+            <div class="check pass">
+              <div><strong>Lookup exits s1 into name verification</strong> <span class="pill pass">pass</span></div>
+              <div class="muted"><strong>Expected:</strong> After successful lookup, the call should move into s2a_verify_name.</div>
+              <div><strong>Actual:</strong> s2a_verify_name</div>
+            </div>
+            </div>
+          </div>
+          <div>
+            <h3>Run Metadata</h3>
+            <p><strong>Call ID:</strong> <code>call_simulation_dd6a46a</code></p><p><strong>Start state:</strong> <code>s1_verify_consumer</code></p><p><strong>Current state:</strong> <code>s2a_verify_name</code></p>
+          </div>
+          <div>
+            <h3>Timeline</h3>
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Actor</th><th>Content</th></tr>
+              </thead>
+              <tbody>
+            <tr>
+              <td>2026-04-28 14:52:19 IST</td>
+              <td>Assistant</td>
+              <td>Hi. Thanks for calling American Express. I&#x27;m your AI assistant here to help you. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. I&#x27;m having trouble pulling up your information using the number that you&#x27;re calling from. May I please have the phone number that you have on file with us?</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:19 IST</td>
+              <td>User</td>
+              <td>My reference number is 70360256</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:23 IST</td>
+              <td>Assistant</td>
+              <td>Thank you.<br>Let me look that up for you. &lt;break time=&quot;500ms&quot; /&gt;</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:28 IST</td>
+              <td>Tool</td>
+              <td>get_details_from_contact args={&quot;reference_number&quot;: &quot;70360256&quot;} result=consumer_id=70360256, name=KELSEY HOWE</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:28 IST</td>
+              <td>Tool</td>
+              <td>transition_to_s2a_verify_name args={&quot;lookup_method&quot;: &quot;reference_number&quot;} result=Transitioned to &quot;s2a_verify_name&quot; state</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:28 IST</td>
+              <td>State</td>
+              <td>s2a_verify_name</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:28 IST</td>
+              <td>Assistant</td>
+              <td>Could you please help me with your full name?</td>
+            </tr>
+            
+            <tr>
+              <td>2026-04-28 14:52:29 IST</td>
+              <td>Context</td>
+              <td>Captured context snapshot at state s2a_verify_name</td>
+            </tr>
+            </tbody>
+            </table>
+          </div>
+        </article>
+        
+    </section>
+  </main>
+</body>
+</html>
